@@ -58,7 +58,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: qrscanner-apk
+          name: weatherapp-apk
           path: bin/*.apk
           retention-days: 30
 
