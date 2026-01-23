@@ -1,0 +1,386 @@
+#:import dp kivy.metrics.dp
+#:import sp kivy.metrics.sp
+#:import get_color_from_hex kivy.utils.get_color_from_hex
+
+
+<SegmentButton@ToggleButton>:
+    background_normal: ""
+    background_down: ""
+    background_color: 0, 0, 0, 0
+    font_size: sp(14)
+    color: get_color_from_hex("#1E1E1E")
+
+    canvas.before:
+        Color:
+            rgba: get_color_from_hex("#A7D8FF") if self.state == "down" else (0, 0, 0, 0)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(16), ]
+
+
+<SegmentedControl@BoxLayout>:
+    orientation: "horizontal"
+    size_hint_y: None
+    height: dp(46)
+    padding: dp(3)
+    spacing: dp(3)
+
+    canvas.before:
+        Color:
+            rgba: get_color_from_hex("#EAF2F8")
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(20), ]
+        Color:
+            rgba: get_color_from_hex("#C7D3DD")
+        Line:
+            rounded_rectangle: (self.x, self.y, self.width, self.height, dp(20))
+            width: 1
+
+    SegmentButton:
+        id: btn_today
+        text: "Heute"
+        group: "forecast"
+        on_release: app.navigate("today")
+
+    SegmentButton:
+        id: btn_tomorrow
+        text: "Morgen"
+        group: "forecast"
+        on_release: app.navigate("tomorrow")
+
+    SegmentButton:
+        id: btn_7days
+        text: "7 Tage"
+        group: "forecast"
+        on_release: app.navigate("7days")
+
+
+<WeatherCard@BoxLayout>:
+    orientation: "vertical"
+    padding: dp(22)
+    spacing: dp(18)
+
+    canvas.before:
+        Color:
+            rgba: get_color_from_hex("#FFFFFF")
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(18), ]
+        Color:
+            rgba: get_color_from_hex("#DCE6EE")
+        Line:
+            rounded_rectangle: (self.x, self.y, self.width, self.height, dp(18))
+            width: 1
+
+
+<Separator@Widget>:
+    size_hint_y: None
+    height: dp(1)
+    canvas.before:
+        Color:
+            rgba: (0, 0, 0, 0.25)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+
+<ForecastRow>:
+    orientation: "vertical"
+    size_hint_y: None
+    height: dp(66)
+    spacing: dp(6)
+
+    BoxLayout:
+        orientation: "horizontal"
+        size_hint_y: None
+        height: dp(58)
+        padding: dp(8), dp(6)
+        spacing: dp(10)
+
+        Label:
+            text: root.date_text
+            size_hint_x: 0.22
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+            font_size: sp(14) if app.root.ids.sm.current_screen.is_mobile else sp(15)
+
+        Image:
+            source: root.icon_source
+            size_hint: None, None
+            size: dp(36), dp(36)
+            allow_stretch: True
+            keep_ratio: True
+
+        Label:
+            text: root.minmax_text
+            size_hint_x: 0.18
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+            font_size: sp(14) if app.root.ids.sm.current_screen.is_mobile else sp(15)
+
+        Label:
+            text: root.dayparts_text
+            size_hint_x: 0.60
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+            font_size: sp(13) if app.root.ids.sm.current_screen.is_mobile else sp(15)
+
+    Separator:
+
+
+<CenteredLabel@Label>:
+    halign: "center"
+    valign: "middle"
+    text_size: self.size
+    color: get_color_from_hex("#1E1E1E")
+
+
+<TodayScreen>:
+    AnchorLayout:
+        anchor_x: "center"
+        anchor_y: "center"
+
+        WeatherCard:
+            size_hint: None, None
+            width: root.card_width
+            height: min(root.height - dp(40), dp(720))
+
+            BoxLayout:
+                orientation: "vertical"
+                spacing: dp(14)
+
+                SegmentedControl:
+                    id: nav
+
+                AnchorLayout:
+                    anchor_x: "center"
+                    anchor_y: "center"
+
+                    BoxLayout:
+                        orientation: "vertical"
+                        spacing: dp(10)
+                        size_hint: None, None
+                        width: dp(260)
+                        height: dp(320)
+
+                        Image:
+                            source: "icons/location.png"
+                            size_hint: None, None
+                            size: dp(34), dp(34)
+                            pos_hint: {"center_x": 0.5}
+
+                        CenteredLabel:
+                            text: root.location_text
+                            font_size: sp(22)
+                            bold: True
+
+                        Image:
+                            source: "icons/weather_clouds.png"
+                            size_hint: None, None
+                            size: dp(110), dp(110)
+                            pos_hint: {"center_x": 0.5}
+
+                        CenteredLabel:
+                            text: root.temp_text
+                            font_size: sp(52)
+                            bold: True
+
+                        CenteredLabel:
+                            text: root.condition_text
+                            font_size: sp(16)
+                            color: get_color_from_hex("#6B6B6B")
+
+                GridLayout:
+                    cols: 2
+                    size_hint_y: None
+                    height: dp(52)
+                    spacing: dp(14)
+
+                    BoxLayout:
+                        orientation: "horizontal"
+                        spacing: dp(8)
+
+                        Image:
+                            source: "icons/humidity.png"
+                            size_hint: None, None
+                            size: dp(26), dp(26)
+
+                        BoxLayout:
+                            orientation: "vertical"
+                            spacing: dp(2)
+
+                            Label:
+                                text: root.humidity_text
+                                halign: "left"
+                                valign: "middle"
+                                text_size: self.size
+
+                            Label:
+                                text: "Humidity"
+                                color: get_color_from_hex("#6B6B6B")
+                                halign: "left"
+                                valign: "middle"
+                                text_size: self.size
+
+                    BoxLayout:
+                        orientation: "horizontal"
+                        spacing: dp(8)
+
+                        Image:
+                            source: "icons/wind.png"
+                            size_hint: None, None
+                            size: dp(26), dp(26)
+
+                        BoxLayout:
+                            orientation: "vertical"
+                            spacing: dp(2)
+
+                            Label:
+                                text: root.wind_text
+                                halign: "left"
+                                valign: "middle"
+                                text_size: self.size
+
+                            Label:
+                                text: "Wind"
+                                color: get_color_from_hex("#6B6B6B")
+                                halign: "left"
+                                valign: "middle"
+                                text_size: self.size
+
+
+<TomorrowScreen>:
+    AnchorLayout:
+        anchor_x: "center"
+        anchor_y: "center"
+
+        WeatherCard:
+            size_hint: None, None
+            width: root.card_width
+            height: min(root.height - dp(40), dp(720))
+
+            BoxLayout:
+                orientation: "vertical"
+                spacing: dp(14)
+
+                SegmentedControl:
+                    id: nav
+
+                AnchorLayout:
+                    anchor_x: "center"
+                    anchor_y: "center"
+
+                    BoxLayout:
+                        orientation: "vertical"
+                        spacing: dp(10)
+                        size_hint: None, None
+                        width: dp(260)
+                        height: dp(280)
+
+                        Image:
+                            source: "icons/location.png"
+                            size_hint: None, None
+                            size: dp(34), dp(34)
+                            pos_hint: {"center_x": 0.5}
+
+                        CenteredLabel:
+                            text: root.location_text
+                            font_size: sp(22)
+                            bold: True
+
+                        Image:
+                            source: "icons/weather_clouds.png"
+                            size_hint: None, None
+                            size: dp(110), dp(110)
+                            pos_hint: {"center_x": 0.5}
+
+                CenteredLabel:
+                    text: root.minmax_text
+                    font_size: sp(18)
+                    bold: True
+                    size_hint_y: None
+                    height: dp(30)
+
+                CenteredLabel:
+                    text: root.condition_text
+                    font_size: sp(20)
+                    color: get_color_from_hex("#6B6B6B")
+                    size_hint_y: None
+                    height: dp(30)
+
+                Widget:
+
+                CenteredLabel:
+                    text: root.dayparts_text
+                    font_size: sp(18)
+                    bold: True
+                    size_hint_y: None
+                    height: dp(34)
+
+
+<SevenDaysScreen>:
+    AnchorLayout:
+        anchor_x: "center"
+        anchor_y: "center"
+
+        WeatherCard:
+            id: card
+            size_hint: None, None
+            width: root.card_width
+            height: min(root.height - dp(40), dp(760))
+
+            BoxLayout:
+                orientation: "vertical"
+                spacing: dp(14)
+
+                SegmentedControl:
+                    id: nav
+
+                RecycleView:
+                    id: rv
+                    size_hint_y: None
+                    bar_width: dp(6)
+                    scroll_type: ["bars", "content"]
+                    viewclass: "ForecastRow"
+                    data: root.forecast_items
+
+                    RecycleBoxLayout:
+                        orientation: "vertical"
+                        default_size: None, dp(66)
+                        default_size_hint: 1, None
+                        size_hint_y: None
+                        height: self.minimum_height
+                        spacing: dp(0)
+
+
+<WeatherRoot>:
+    orientation: "vertical"
+
+    canvas.before:
+        Color:
+            rgba: get_color_from_hex("#F3F7FA")
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    ScreenManager:
+        id: sm
+
+        TodayScreen:
+            name: "today"
+
+        TomorrowScreen:
+            name: "tomorrow"
+
+        SevenDaysScreen:
+            name: "seven_days"
+
+
+WeatherRoot:
