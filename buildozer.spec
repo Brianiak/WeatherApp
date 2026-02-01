@@ -6,6 +6,7 @@ package.domain = gsog.eigeneDomain
 
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas
+entrypoint = src/main.py
 
 version = 0.1
 requirements = python3,kivy

@@ -11,5 +11,5 @@ It focuses on layout and navigation rather than live data, and ships with sample
 - Adapts the card width to the window size for a responsive layout.
 
 ## Notes
-- Data is currently hardcoded in `main.py` for demonstration.
-- UI layout and styling live in `weather.kv`.
+- Data is currently hardcoded in `src/main.py` for demonstration.
+- UI layout and styling live in `src/weather.kv`.

@@ -1,10 +1,19 @@
 
+from pathlib import Path
+
 from kivy.app import App
 from kivy.properties import StringProperty
+from kivy.resources import resource_add_path
 from kivy.uix.boxlayout import BoxLayout
 
 from base_screen import BaseWeatherScreen
 from five_days_screen import FiveDaysScreen  # noqa: F401
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+KV_PATH = Path(__file__).with_name("weather.kv")
+
+for resource_dir in (PROJECT_ROOT, KV_PATH.parent):
+    resource_add_path(str(resource_dir))
 
 
 class ForecastRow(BoxLayout):
@@ -60,8 +69,7 @@ class WeatherRoot(BoxLayout):
 
 
 class WeatherApp(App):
-    def build(self):
-        return WeatherRoot()
+    kv_file = str(KV_PATH)
 
     def navigate(self, key: str):
         self.root.navigate(key)
