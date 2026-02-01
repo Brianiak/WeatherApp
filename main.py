@@ -1,13 +1,10 @@
+
 from kivy.app import App
-from kivy.core.window import Window
-from kivy.metrics import dp
 from kivy.properties import StringProperty
 from kivy.uix.boxlayout import BoxLayout
 
 from base_screen import BaseWeatherScreen
 from five_days_screen import FiveDaysScreen
-
-ROW_HEIGHT = dp(66)
 
 
 class ForecastRow(BoxLayout):
