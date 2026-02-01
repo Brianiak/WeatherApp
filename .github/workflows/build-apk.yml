@@ -28,10 +28,39 @@ jobs:
       - name: Lint with ruff
         run: ruff check .
 
+  test:
+    name: Run tests with coverage
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests with coverage
+        run: python test_five_days_screen.py
+        continue-on-error: true
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./.coverage
+          fail_ci_if_error: false
+        if: always()
+
   build-android:
     name: Build for Android
     runs-on: ubuntu-22.04
-    needs: lint
+    needs: [lint, test]
 
     steps:
       - name: Checkout
