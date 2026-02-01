@@ -4,7 +4,7 @@ from kivy.properties import StringProperty
 from kivy.uix.boxlayout import BoxLayout
 
 from base_screen import BaseWeatherScreen
-from five_days_screen import FiveDaysScreen
+from five_days_screen import FiveDaysScreen  # noqa: F401
 
 
 class ForecastRow(BoxLayout):
