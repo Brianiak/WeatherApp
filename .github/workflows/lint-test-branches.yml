@@ -21,18 +21,22 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install ruff
+          pip install ruff pytest pytest-cov
 
       - name: Lint with ruff
         run: ruff check .
 
-      # TODO: Check all tests, not just one file
-      - name: Run tests with coverage
-        run: python tests/test_five_days_screen.py
+      - name: Run all test files with coverage
+        run: xvfb-run pytest tests/ --cov=src --cov-report=xml
         continue-on-error: true
 
       - name: Upload coverage reports
