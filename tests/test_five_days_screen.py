@@ -55,7 +55,7 @@ class TestFiveDaysScreen(unittest.TestCase):
             "icons/03d.png", "icons/03n.png", "icons/04d.png", "icons/04n.png",
             "icons/09d.png", "icons/09n.png", "icons/10d.png", "icons/10n.png",
             "icons/11d.png", "icons/11n.png", "icons/13d.png", "icons/13n.png",
-            "icons/50d.png", "icons/50n.png", ""
+            "icons/50d.png", "icons/50n.png"
         }
         for item in self.screen.forecast_items:
             self.assertIn(item["icon_source"], valid_icons)
