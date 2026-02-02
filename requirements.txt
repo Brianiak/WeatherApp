@@ -5,6 +5,14 @@ kivy==2.3.1
 ruff==0.1.8
 coverage==7.3.2
 
+#for school pcs
+#https://github.com/kivymd/KivyMD/archive/master.zip
+#materialyoucolor
+#exceptiongroup
+#asyncgui
+#asynckivy
+#faker
+
 
 
 
