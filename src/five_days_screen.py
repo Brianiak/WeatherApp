@@ -157,12 +157,12 @@ class FiveDaysScreen(BaseWeatherScreen):
                     temps_by_time["night"] = temp_celsius
             
             # Format day parts text, use "--" for missing data
-            morning = temps_by_time["morning"] if temps_by_time["morning"] is not None else "--"
-            midday = temps_by_time["midday"] if temps_by_time["midday"] is not None else "--"
-            evening = temps_by_time["evening"] if temps_by_time["evening"] is not None else "--"
-            night = temps_by_time["night"] if temps_by_time["night"] is not None else "--"
+            morning = f"{temps_by_time['morning']}°" if temps_by_time["morning"] is not None else "--"
+            midday = f"{temps_by_time['midday']}°" if temps_by_time["midday"] is not None else "--"
+            evening = f"{temps_by_time['evening']}°" if temps_by_time["evening"] is not None else "--"
+            night = f"{temps_by_time['night']}°" if temps_by_time["night"] is not None else "--"
             
-            dayparts_text = f"{morning}° {midday}° {evening}° {night}°"
+            dayparts_text = f"{morning} {midday} {evening} {night}"
             
             forecast_items.append({
                 "date_text": date_str,
@@ -172,6 +172,46 @@ class FiveDaysScreen(BaseWeatherScreen):
             })
         
         return forecast_items
+
+    def _load_fallback_data(self):
+        """
+        Load hardcoded fallback data for testing when API call fails.
+        
+        Provides static 5-day forecast data with predefined dates, temperatures,
+        and weather icons for testing and development purposes.
+        """
+        self.forecast_items = [
+            {
+                "date_text": "Mo, 22.01.",
+                "icon_source": "icons/01d.png",
+                "minmax_text": "15° / 25°",
+                "dayparts_text": "M: 18° Mi: 24° A: 22° N: 16°"
+            },
+            {
+                "date_text": "Di, 23.01.",
+                "icon_source": "icons/02d.png",
+                "minmax_text": "14° / 23°",
+                "dayparts_text": "M: 17° Mi: 22° A: 20° N: 15°"
+            },
+            {
+                "date_text": "Mi, 24.01.",
+                "icon_source": "icons/03d.png",
+                "minmax_text": "13° / 21°",
+                "dayparts_text": "M: 16° Mi: 20° A: 19° N: 14°"
+            },
+            {
+                "date_text": "Do, 25.01.",
+                "icon_source": "icons/04d.png",
+                "minmax_text": "12° / 20°",
+                "dayparts_text": "M: 15° Mi: 19° A: 18° N: 13°"
+            },
+            {
+                "date_text": "Fr, 26.01.",
+                "icon_source": "icons/10d.png",
+                "minmax_text": "11° / 19°",
+                "dayparts_text": "M: 14° Mi: 18° A: 17° N: 12°"
+            }
+        ]
 
     def on_responsive_update(self):
         """
