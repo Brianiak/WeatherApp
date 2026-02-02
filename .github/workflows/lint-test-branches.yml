@@ -30,6 +30,7 @@ jobs:
       - name: Lint with ruff
         run: ruff check .
 
+      # TODO: Check all tests, not just one file
       - name: Run tests with coverage
         run: python tests/test_five_days_screen.py
         continue-on-error: true
