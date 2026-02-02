@@ -1,10 +1,12 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import coverage
 from kivy.metrics import dp
 from kivy.core.window import Window
+from kivy.clock import Clock
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
@@ -22,6 +24,19 @@ class TestFiveDaysScreen(unittest.TestCase):
         """Set up test fixtures before each test"""
         Window.size = (400, 800)
         self.screen = FiveDaysScreen()
+        # Mock weather_service.get_weather to trigger fallback data
+        self.patcher = patch('five_days_screen.weather_service.get_weather')
+        self.mock_get_weather = self.patcher.start()
+        self.mock_get_weather.side_effect = Exception("Mocked API failure for testing")
+
+    def tearDown(self):
+        """Clean up after each test"""
+        self.patcher.stop()
+        
+    def _trigger_data_load(self):
+        """Helper method to trigger and complete data loading"""
+        self.screen.on_kv_post(None)
+        Clock.tick()  # Process all scheduled events
 
     def test_initialization(self):
         """Test that FiveDaysScreen initializes correctly"""
@@ -30,26 +45,26 @@ class TestFiveDaysScreen(unittest.TestCase):
 
     def test_forecast_items_count(self):
         """Test that exactly 5 forecast items are loaded"""
-        self.screen.on_kv_post(None)
+        self._trigger_data_load()
         self.assertEqual(len(self.screen.forecast_items), 5)
 
     def test_forecast_items_structure(self):
         """Test that forecast items have correct structure"""
-        self.screen.on_kv_post(None)
+        self._trigger_data_load()
         required_keys = {"date_text", "icon_source", "minmax_text", "dayparts_text"}
         for item in self.screen.forecast_items:
             self.assertTrue(required_keys.issubset(item.keys()))
 
     def test_forecast_items_dates(self):
         """Test that forecast items have valid dates"""
-        self.screen.on_kv_post(None)
+        self._trigger_data_load()
         expected_dates = ["Mo, 22.01.", "Di, 23.01.", "Mi, 24.01.", "Do, 25.01.", "Fr, 26.01."]
         actual_dates = [item["date_text"] for item in self.screen.forecast_items]
         self.assertEqual(actual_dates, expected_dates)
 
     def test_forecast_items_have_icons(self):
         """Test that all forecast items have valid icon sources"""
-        self.screen.on_kv_post(None)
+        self._trigger_data_load()
         valid_icons = {
             "icons/01d.png", "icons/01n.png", "icons/02d.png", "icons/02n.png",
             "icons/03d.png", "icons/03n.png", "icons/04d.png", "icons/04n.png",
@@ -82,7 +97,7 @@ class TestFiveDaysScreen(unittest.TestCase):
 
     def test_forecast_data_not_empty(self):
         """Test that forecast data is populated after initialization"""
-        self.screen.on_kv_post(None)
+        self._trigger_data_load()
         self.assertGreater(len(self.screen.forecast_items), 0)
         for item in self.screen.forecast_items:
             self.assertTrue(item["date_text"])
@@ -98,7 +113,17 @@ class TestForecastItemValidation(unittest.TestCase):
         """Set up test fixtures"""
         Window.size = (400, 800)
         self.screen = FiveDaysScreen()
+        # Mock weather_service.get_weather to trigger fallback data
+        self.patcher = patch('five_days_screen.weather_service.get_weather')
+        self.mock_get_weather = self.patcher.start()
+        self.mock_get_weather.side_effect = Exception("Mocked API failure for testing")
+        # Trigger data load
         self.screen.on_kv_post(None)
+        Clock.tick()  # Process all scheduled events
+
+    def tearDown(self):
+        """Clean up after each test"""
+        self.patcher.stop()
 
     def test_min_max_temp_format(self):
         """Test that min/max temps are in correct format"""
