@@ -6,6 +6,7 @@ ruff==0.1.8
 coverage==7.3.2
 
 #for school pcs
+#kivy
 #https://github.com/kivymd/KivyMD/archive/master.zip
 #materialyoucolor
 #exceptiongroup
