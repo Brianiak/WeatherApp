@@ -6,8 +6,11 @@ from kivy.properties import StringProperty
 from kivy.resources import resource_add_path
 from kivy.uix.boxlayout import BoxLayout
 
+import json
+
 from base_screen import BaseWeatherScreen
 from five_days_screen import FiveDaysScreen  # noqa: F401
+import weather_service
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 KV_PATH = Path(__file__).with_name("weather.kv")
@@ -76,4 +79,19 @@ class WeatherApp(App):
 
 
 if __name__ == "__main__":
+    # Print current weather JSON once when running as a script, then start the app.
+    def print_weather_json():
+        """Call the weather service and print the returned JSON.
+
+        Uses the public `get_weather()` function from `weather_service`.
+        Errors are caught and printed so they don't prevent the GUI from starting.
+        """
+        try:
+            # Prefer direct import; fall back to package-style if needed.
+            data = weather_service.get_weather()
+            print(json.dumps(data, indent=2))
+        except Exception as e:
+            print("Error fetching weather:", e)
+
+    print_weather_json()
     WeatherApp().run()

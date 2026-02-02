@@ -14,10 +14,24 @@ import pprint
 
 # Import project-specific exceptions. Use a relative import where possible
 try:
-    from .exceptions import MissingAPIConfigError
+    from .exceptions import (
+        MissingAPIConfigError,
+        EnvNotFoundError,
+        NetworkError,
+        ServiceUnavailableError,
+        APITokenExpiredError,
+        APIRequestError,
+    )
 except Exception:
     # Fallback to absolute import to support different execution contexts
-    from exceptions import MissingAPIConfigError
+    from exceptions import (
+        MissingAPIConfigError,
+        EnvNotFoundError,
+        NetworkError,
+        ServiceUnavailableError,
+        APITokenExpiredError,
+        APIRequestError,
+    )
 
 
 def load_dotenv(path=None):
@@ -28,6 +42,9 @@ def load_dotenv(path=None):
     ignored. Values are not interpreted (no quote stripping beyond simple
     split) — they are stored as raw strings.
 
+    Raises:
+        EnvNotFoundError: if the .env file does not exist at the expected path.
+
     Returns a dict of loaded variables.
     """
     if path is None:
@@ -36,8 +53,7 @@ def load_dotenv(path=None):
     else:
         path = Path(path)
     if not path.exists():
-        # No .env found — return empty mapping but do not crash here.
-        return {}
+        raise EnvNotFoundError(f".env file not found at: {path}")
     env = {}
     with path.open() as f:
         for line in f:
@@ -51,29 +67,76 @@ def load_dotenv(path=None):
     os.environ.update(env)
     return env
 
+# NOTE: Do not load the .env file at import time. Loading is deferred until
+# the service is actually used (via `_get_config()` / `get_weather()`), so
+# importing the module does not raise on missing files and leaves the
+# `get_weather` symbol available for callers and tests.
 
-# Load environment variables from the project .env file.
-load_dotenv()
+def _get_config():
+    """Return (URL, API_KEY) from environment or raise MissingAPIConfigError.
+
+    Configuration is validated when the service is actually used (via
+    `get_weather()`), which avoids side-effects at import time.
+    """
+    # Ensure environment variables are loaded from the project's .env file
+    # prior to reading them. This will raise EnvNotFoundError if the .env
+    # file does not exist, which callers can catch if they wish.
+    load_dotenv()
+    url = os.getenv("URL")
+    api_key = os.getenv("API_KEY")
+    if not url or not api_key:
+        raise MissingAPIConfigError("Missing URL or API_KEY in environment or .env")
+    return url, api_key
+
+# TODO: Insert lat and lon parameters into the URL based on user location as soon as that feature is available.
+def build_request_url(url: str, api_key: str) -> str:
+    """Return the full request URL by concatenating base URL and API key."""
+    return url + api_key
+
+# TODO: Consider creating fallback logic f.ex. caching the last successful response to use when network errors occur.
+def fetch_json(request_url: str, timeout: int = 10) -> dict:
+    """Perform HTTP GET against `request_url` and return parsed JSON.
+
+    Raises:
+        NetworkError: when there are network connectivity problems.
+        APITokenExpiredError: when API returns 401 Unauthorized.
+        ServiceUnavailableError: when API returns a 5xx status.
+        APIRequestError: for other non-successful responses or invalid JSON.
+    """
+    try:
+        res = requests.get(url=request_url, timeout=timeout)
+    except (requests.ConnectionError, requests.Timeout) as exc:
+        # Connection problems (no internet, DNS failure, timeouts)
+        raise NetworkError("Network error contacting weather API") from exc
+
+    # Handle authentication / token errors explicitly
+    if res.status_code == 401:
+        raise APITokenExpiredError("API token invalid or expired")
+
+    # Service-side errors
+    if 500 <= res.status_code < 600:
+        raise ServiceUnavailableError(f"Weather service returned {res.status_code}")
+
+    # Any other non-OK response is treated as a generic API request error
+    if not res.ok:
+        raise APIRequestError(f"API request failed: HTTP {res.status_code}: {res.text}")
+
+    try:
+        return res.json()
+    except ValueError as exc:
+        raise APIRequestError("Invalid JSON response from weather API") from exc
+
+def get_weather() -> dict:
+    """High-level API: return weather JSON from configured provider.
+
+    This function reads configuration, builds the request URL, performs
+    the HTTP request and returns the parsed JSON. It raises
+    `MissingAPIConfigError` when configuration is missing and propagates
+    network-related exceptions from `requests`.
+    """
+    url, api_key = _get_config()
+    request_url = build_request_url(url, api_key)
+    return fetch_json(request_url)
 
 
-# Read required configuration from environment variables.
-URL = os.getenv("URL")
-API_KEY = os.getenv("API_KEY")
-if not URL or not API_KEY:
-    # Fail fast with an actionable, catchable exception if config is missing.
-    raise MissingAPIConfigError("Missing URL or API_KEY in environment or .env")
-
-
-# Build the full request URL by concatenating the base URL and API key.
-request = URL + API_KEY
-
-# Perform the HTTP GET request to the weather API.
-res = requests.get(url=request)
-
-# Parse JSON response. This will raise if the response is not JSON.
-raw = res.json()
-
-
-# Pretty-print the returned JSON for debugging / development purposes.
-pp = pprint.PrettyPrinter(indent=4)
-pp.pprint(raw)
+__all__ = ["get_weather", "build_request_url", "fetch_json"]
