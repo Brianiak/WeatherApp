@@ -1,16 +1,18 @@
 
 from pathlib import Path
+from plyer import gps # python -m pip install plyer requests
 
 from kivy.app import App
 from kivy.properties import StringProperty
 from kivy.resources import resource_add_path
 from kivy.uix.boxlayout import BoxLayout
+from kivy.utils import platform as kivy_platform
 
 import json
 
 from base_screen import BaseWeatherScreen
 from five_days_screen import FiveDaysScreen  # noqa: F401
-import weather_service
+import services.weather_service as weather_service
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 KV_PATH = Path(__file__).with_name("weather.kv")
@@ -73,6 +75,38 @@ class WeatherRoot(BoxLayout):
 
 class WeatherApp(App):
     kv_file = str(KV_PATH)
+
+    def on_start(self):
+        # Only attempt to use the native GPS implementation on mobile.
+        # Plyer's GPS is not implemented on desktop platforms (raises
+        # ModuleNotFoundError / NotImplementedError). For desktop/testing
+        # fall back to simulated coordinates.
+        if kivy_platform in ("android", "ios"):
+            try:
+                gps.configure(on_location=self.on_gps_location)
+                gps.start()
+            except NotImplementedError:
+                print("Plyer GPS not implemented on this platform.")
+            except Exception as e:
+                print("Failed to start GPS:", e)
+        else:
+            print(f"Platform '{kivy_platform}' has no Plyer GPS; using simulated coordinates.")
+            # Call the GPS handler with a reasonable default location (for testing).
+            # You can replace these with any coordinates you want to test with.
+            self.on_gps_location(lat=48.48, lon=7.93)
+    
+    def on_gps_location(self, **kwargs):
+        # Extract coordinates provided by Plyer GPS and request weather.
+        lat = kwargs.get("lat")
+        lon = kwargs.get("lon")
+        print("GPS location:", kwargs)
+
+        # Call weather service with the received coordinates and print JSON.
+        try:
+            data = weather_service.get_weather(lat=lat, lon=lon)
+            print(json.dumps(data, indent=2))
+        except Exception as e:
+            print("Error fetching weather with GPS coordinates:", e)
 
     def navigate(self, key: str):
         self.root.navigate(key)
