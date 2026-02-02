@@ -70,11 +70,6 @@ bin/
 .Trashes
 ehthumbs.db
 
-# Environment variables
-.env
-.env.local
-.env.*.local
-
 # Kivy logs
 *.log
 
