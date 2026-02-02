@@ -63,11 +63,11 @@ class FiveDaysScreen(BaseWeatherScreen):
              "minmax_text": "4° / 10°", "dayparts_text": "M: 5°   Mi: 9°   A: 7°   N: 4°"},
             {"date_text": "Di, 23.01.", "icon_source": "icons/rain.png",
              "minmax_text": "3° / 8°", "dayparts_text": "M: 4°   Mi: 7°   A: 6°   N: 3°"},
-            {"date_text": "Mi, 24.01.", "icon_source": "icons/sun.png",
+            {"date_text": "Mi, 24.01.", "icon_source": "icons/light_rain_day.png",
              "minmax_text": "2° / 9°", "dayparts_text": "M: 3°   Mi: 9°   A: 6°   N: 2°"},
             {"date_text": "Do, 25.01.", "icon_source": "icons/cloud.png",
              "minmax_text": "1° / 7°", "dayparts_text": "M: 2°   Mi: 6°   A: 5°   N: 1°"},
-            {"date_text": "Fr, 26.01.", "icon_source": "icons/rain.png",
+            {"date_text": "Fr, 26.01.", "icon_source": "icons/light_rain_day.png",
              "minmax_text": "0° / 6°", "dayparts_text": "M: 1°   Mi: 5°   A: 4°   N: 0°"},
         ]
 

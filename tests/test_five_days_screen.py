@@ -1,8 +1,15 @@
+import sys
 import unittest
+from pathlib import Path
+
 import coverage
 from kivy.metrics import dp
 from kivy.core.window import Window
-from five_days_screen import FiveDaysScreen, ROW_HEIGHT
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from five_days_screen import FiveDaysScreen, ROW_HEIGHT  # noqa: E402
 
 # Initialize coverage
 cov = coverage.Coverage()

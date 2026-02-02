@@ -31,7 +31,7 @@ jobs:
         run: ruff check .
 
       - name: Run tests with coverage
-        run: python test_five_days_screen.py
+        run: python tests/test_five_days_screen.py
         continue-on-error: true
 
       - name: Upload coverage reports
