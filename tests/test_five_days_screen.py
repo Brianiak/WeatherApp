@@ -50,7 +50,13 @@ class TestFiveDaysScreen(unittest.TestCase):
     def test_forecast_items_have_icons(self):
         """Test that all forecast items have valid icon sources"""
         self.screen.on_kv_post(None)
-        valid_icons = {"icons/sun.png", "icons/rain.png", "icons/sun_cloud.png", "icons/cloud.png"}
+        valid_icons = {
+            "icons/01d.png", "icons/01n.png", "icons/02d.png", "icons/02n.png",
+            "icons/03d.png", "icons/03n.png", "icons/04d.png", "icons/04n.png",
+            "icons/09d.png", "icons/09n.png", "icons/10d.png", "icons/10n.png",
+            "icons/11d.png", "icons/11n.png", "icons/13d.png", "icons/13n.png",
+            "icons/50d.png", "icons/50n.png", ""
+        }
         for item in self.screen.forecast_items:
             self.assertIn(item["icon_source"], valid_icons)
 
