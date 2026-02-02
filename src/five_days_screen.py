@@ -76,30 +76,6 @@ class FiveDaysScreen(BaseWeatherScreen):
         Falls back to hardcoded data if API call fails.
         """
         try:
-            # Fetch weather data from API
-            data = weather_service.get_weather()
-            
-            # Process the forecast data
-            self.forecast_items = self._process_forecast_data(data)
-            
-        except Exception as e:
-            print(f"Error loading forecast data: {e}")
-            # Fallback to hardcoded data
-            self._load_fallback_data()
-        
-        self._update_rv_height()
-
-    def _load_forecast_data(self):
-        """
-        Fetch and process 5-day forecast data from the weather API.
-        
-        Makes an API call to get forecast data, processes it into daily summaries
-        with min/max temperatures and time-of-day breakdowns, then updates the
-        forecast_items list.
-        
-        Falls back to hardcoded data if API call fails.
-        """
-        try:
             # Call the weather API forecast endpoint
             data = weather_service.get_weather()
             
@@ -124,7 +100,6 @@ class FiveDaysScreen(BaseWeatherScreen):
             List of dictionaries with forecast information for 5 days
         """
         from collections import defaultdict
-        from datetime import datetime
         
         daily_data = defaultdict(list)
         
