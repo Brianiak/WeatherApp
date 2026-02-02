@@ -102,6 +102,10 @@ jobs:
           key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
             ${{ runner.os }}-buildozer-
+      
+      #copy main.py to root since it wouldnt work without it
+      - name: Copy main.py for Buildozer
+        run: cp src/main.py main.py
 
       - name: Build with Buildozer
         env:
