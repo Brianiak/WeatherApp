@@ -1,14 +1,14 @@
 import sys
-from pathlib import Path
 import os
 import unittest
 from unittest.mock import patch, Mock
+from pathlib import Path
+
+import weather_service
+import coverage
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
-import weather_service
-
-import coverage
 
 # Initialize coverage
 cov = coverage.Coverage()

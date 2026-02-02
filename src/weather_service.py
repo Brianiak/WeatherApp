@@ -10,7 +10,6 @@ The `.env` file is expected to contain `URL` and `API_KEY` variables.
 import os
 from pathlib import Path
 import requests
-import pprint
 
 # Import project-specific exceptions. Use a relative import where possible
 try:
