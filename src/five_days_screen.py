@@ -20,7 +20,7 @@ from kivy.properties import ListProperty
 from kivy.clock import Clock
 
 from base_screen import BaseWeatherScreen
-import weather_service
+from services import weather_service
 
 ROW_HEIGHT = dp(66)
 

@@ -1,6 +1,10 @@
 import sys
-import unittest
 from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+import unittest
 from unittest.mock import patch
 
 import coverage
@@ -8,10 +12,8 @@ from kivy.metrics import dp
 from kivy.core.window import Window
 from kivy.clock import Clock
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
-
 from five_days_screen import FiveDaysScreen, ROW_HEIGHT  # noqa: E402
+import services.weather_service as weather_service
 
 # Initialize coverage
 cov = coverage.Coverage()
