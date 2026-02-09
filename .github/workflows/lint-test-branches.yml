@@ -46,8 +46,8 @@ jobs:
           fail_ci_if_error: false
         if: always()
   
-  build-android:
-    name: Build for Android
+  build-android-apk-testing:
+    name: Test Build for Android
     runs-on: ubuntu-22.04
     needs: [lint-test]
 
