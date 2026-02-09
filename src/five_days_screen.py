@@ -208,31 +208,31 @@ class FiveDaysScreen(BaseWeatherScreen):
                 "date_text": "Mo, 22.01.",
                 "icon_source": "icons/01d.png",
                 "minmax_text": "15° / 25°",
-                "dayparts_text": "M: 18° Mi: 24° A: 22° N: 16°"
+                "dayparts_text": "18° 24° 22° 16°"
             },
             {
                 "date_text": "Di, 23.01.",
                 "icon_source": "icons/02d.png",
                 "minmax_text": "14° / 23°",
-                "dayparts_text": "M: 17° Mi: 22° A: 20° N: 15°"
+                "dayparts_text": "17° 22° 20° 15°"
             },
             {
                 "date_text": "Mi, 24.01.",
                 "icon_source": "icons/03d.png",
                 "minmax_text": "13° / 21°",
-                "dayparts_text": "M: 16° Mi: 20° A: 19° N: 14°"
+                "dayparts_text": "16° 20° 19° 14°"
             },
             {
                 "date_text": "Do, 25.01.",
                 "icon_source": "icons/04d.png",
                 "minmax_text": "12° / 20°",
-                "dayparts_text": "M: 15° Mi: 19° A: 18° N: 13°"
+                "dayparts_text": "15° 19° 18° 13°"
             },
             {
                 "date_text": "Fr, 26.01.",
                 "icon_source": "icons/10d.png",
                 "minmax_text": "11° / 19°",
-                "dayparts_text": "M: 14° Mi: 18° A: 17° N: 12°"
+                "dayparts_text": "14° 18° 17° 12°"
             }
         ]
 

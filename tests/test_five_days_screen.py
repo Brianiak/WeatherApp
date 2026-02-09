@@ -136,14 +136,12 @@ class TestForecastItemValidation(unittest.TestCase):
             self.assertIn("/", minmax)
 
     def test_dayparts_text_format(self):
-        """Test that dayparts text contains expected abbreviations"""
+        """Test that dayparts text contains only 4 temperature values"""
         for item in self.screen.forecast_items:
             dayparts = item["dayparts_text"]
-            # Should contain M (Morgen), Mi (Mittag), A (Abend), N (Nacht)
-            self.assertIn("M:", dayparts)
-            self.assertIn("Mi:", dayparts)
-            self.assertIn("A:", dayparts)
-            self.assertIn("N:", dayparts)
+            # Should be 4 plain values without prefixes (M:, Mi:, A:, N:)
+            self.assertEqual(len(dayparts.split()), 4)
+            self.assertNotIn(":", dayparts)
     
 
 # Dummy Tests for coverage
@@ -380,14 +378,12 @@ class TestLoadFallbackData(unittest.TestCase):
             self.assertIn("°", minmax)
 
     def test_load_fallback_data_dayparts_format(self):
-        """Test that fallback data has correct dayparts format"""
+        """Test that fallback data has 4 plain daypart temperatures"""
         self.screen._load_fallback_data()
         for item in self.screen.forecast_items:
             dayparts = item["dayparts_text"]
-            self.assertIn("M:", dayparts)
-            self.assertIn("Mi:", dayparts)
-            self.assertIn("A:", dayparts)
-            self.assertIn("N:", dayparts)
+            self.assertEqual(len(dayparts.split()), 4)
+            self.assertNotIn(":", dayparts)
 
 
 class TestUpdateRVHeight(unittest.TestCase):
