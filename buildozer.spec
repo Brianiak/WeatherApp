@@ -5,7 +5,7 @@ package.name = eigenesPaket
 package.domain = gsog.eigeneDomain
 
 source.dir = .
-source.include_exts = py,png,jpg,kv,atlas
+source.include_exts = py,png,jpg,kv,atlas,env
 entrypoint = src/main.py
 
 version = 0.1
@@ -15,7 +15,17 @@ orientation = portrait
 # Permissions required for GPS and network access on Android
 android.permissions = INTERNET,ACCESS_COARSE_LOCATION,ACCESS_FINE_LOCATION
 fullscreen = 0
-android.archs = arm64-v8a
+
+# Support both 64-bit and 32-bit ARM devices
+android.archs = arm64-v8a, armeabi-v7a
+
+# Android API configuration
+android.api = 33
+android.minapi = 21
+android.ndk = 25b
+
+# Accept SDK license automatically
+android.accept_sdk_license = True
 
 # iOS specific
 ios.kivy_ios_url = https://github.com/kivy/kivy-ios
