@@ -24,9 +24,6 @@ icon.filename = icons/weather-frog-removebg-preview.png
 presplash.filename = icons/weather-frog-removebg-preview.png
 
 # Support 64-bit ARM devices (most modern phones)
-presplash.filename = icons/weather-frog-removebg-preview.png
-
-# Support 64-bit ARM devices (most modern phones)
 android.archs = arm64-v8a
 
 # Android API configuration
