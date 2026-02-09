@@ -1,14 +1,15 @@
 import sys
-import os
-import unittest
-from unittest.mock import patch, Mock
 from pathlib import Path
-
-import coverage
-import services.weather_service as weather_service
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+import os
+import unittest  # noqa: E402
+from unittest.mock import patch, Mock, MagicMock  # noqa: E402
+
+import coverage  # noqa: E402
+import services.weather_service as weather_service  # noqa: E402
 
 # Initialize coverage
 cov = coverage.Coverage()
@@ -191,7 +192,7 @@ class TestLoadDotenv(unittest.TestCase):
         env_content = "TEST_VAR=test_value\nANOTHER_VAR=another_value"
         env_lines = env_content.split('\n')
         
-        mock_file = Mock()
+        mock_file = MagicMock()
         mock_file.__enter__.return_value = env_lines
         mock_file.__exit__.return_value = None
         
@@ -214,7 +215,7 @@ class TestLoadDotenv(unittest.TestCase):
             "ANOTHER_KEY=another_value"
         ]
         
-        mock_file = Mock()
+        mock_file = MagicMock()
         mock_file.__enter__.return_value = env_lines
         mock_file.__exit__.return_value = None
         
