@@ -78,6 +78,8 @@ class WeatherApp(App):
     kv_file = str(KV_PATH)
     _gps_timeout_event = None
     GPS_TIMEOUT = 30  # seconds
+    current_lat = 51.5074  # Default coordinates (London)
+    current_lon = -0.1278
 
     def on_start(self):
         # Only attempt to use the native GPS implementation on mobile.
@@ -109,7 +111,7 @@ class WeatherApp(App):
     
     def _use_fallback_location(self):
         """Use default coordinates when GPS is unavailable."""
-        self.on_gps_location(lat=48.48, lon=7.93)
+        self.on_gps_location(lat=51.5074, lon=-0.1278)
     
     def on_gps_location(self, **kwargs):
         # Cancel the GPS timeout if it's still pending (GPS responded in time)
@@ -120,6 +122,11 @@ class WeatherApp(App):
         # Extract coordinates provided by Plyer GPS and request weather.
         lat = kwargs.get("lat")
         lon = kwargs.get("lon")
+        
+        # Store coordinates for use by other screens
+        self.current_lat = lat
+        self.current_lon = lon
+        
         print("GPS location:", kwargs)
 
         # Call weather service with the received coordinates and print JSON.
