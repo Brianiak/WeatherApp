@@ -24,6 +24,7 @@ from base_screen import BaseWeatherScreen
 import services.weather_service as weather_service
 
 ROW_HEIGHT = dp(66)
+VISIBLE_FORECAST_DAYS = 5
 
 
 class FiveDaysScreen(BaseWeatherScreen):
@@ -62,9 +63,21 @@ class FiveDaysScreen(BaseWeatherScreen):
             base_widget: The base widget passed by Kivy during initialization
         """
         super().on_kv_post(base_widget)
+        Clock.schedule_once(self._bind_layout_updates, 0)
         
         # Load forecast data from API
         Clock.schedule_once(lambda dt: self._load_forecast_data(), 0)
+
+    def _bind_layout_updates(self, _dt):
+        """Bind size-dependent updates after KV ids are available."""
+        if "card" in self.ids:
+            self.ids.card.bind(size=lambda *_: self._update_rv_height())
+        if "nav" in self.ids:
+            self.ids.nav.bind(size=lambda *_: self._update_rv_height())
+        if "frog_slot" in self.ids:
+            self.ids.frog_slot.bind(size=lambda *_: self._update_rv_height())
+
+        self._update_rv_height()
 
     def _load_forecast_data(self):
         """
@@ -93,7 +106,11 @@ class FiveDaysScreen(BaseWeatherScreen):
             # Fallback to hardcoded data on error
             self._load_fallback_data()
         
-        self._update_rv_height()
+        Clock.schedule_once(lambda dt: self._update_rv_height(), 0)
+
+    def on_forecast_items(self, _instance, _value):
+        """Recalculate height whenever forecast rows are replaced."""
+        Clock.schedule_once(lambda dt: self._update_rv_height(), 0)
 
     def _process_forecast_data(self, data: dict) -> list:
         """
@@ -247,10 +264,18 @@ class FiveDaysScreen(BaseWeatherScreen):
         if "rv" not in self.ids or "card" not in self.ids or "nav" not in self.ids:
             return
 
-        content_height = ROW_HEIGHT * len(self.forecast_items)
-        padding_and_spacing = dp(44 + 14)
+        fixed_spacing = dp(10 * 4)
+        weather_card_vertical_padding = dp(44)
+        frog_height = self.ids.frog_slot.height if "frog_slot" in self.ids else dp(0)
 
-        available = self.ids.card.height - self.ids.nav.height - padding_and_spacing
+        content_height = ROW_HEIGHT * max(len(self.forecast_items), VISIBLE_FORECAST_DAYS)
+        available = (
+            self.ids.card.height
+            - weather_card_vertical_padding
+            - self.ids.nav.height
+            - frog_height
+            - fixed_spacing
+        )
         if available < dp(140):
             available = dp(140)
 
