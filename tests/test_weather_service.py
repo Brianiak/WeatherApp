@@ -4,7 +4,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-import os
+import os # noqa: E402
 import unittest  # noqa: E402
 from unittest.mock import patch, Mock, MagicMock  # noqa: E402
 
