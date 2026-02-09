@@ -103,34 +103,50 @@
 
         Label:
             text: root.date_text
-            size_hint_x: 0.22
+            size_hint_x: 0.25
             halign: "left"
             valign: "middle"
             text_size: self.size
             font_size: sp(14)
+            color: get_color_from_hex("#1E1E1E")
 
-        Image:
-            source: root.icon_source
-            size_hint: None, None
-            size: dp(36), dp(36)
-            allow_stretch: True
-            keep_ratio: True
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint_x: 0.30
+            spacing: dp(6)
+            
+            Widget:
+                size_hint_x: 1
 
-        Label:
-            text: root.minmax_text
-            size_hint_x: 0.18
-            halign: "left"
-            valign: "middle"
-            text_size: self.size
-            font_size: sp(14)
+            Image:
+                source: root.icon_source
+                size_hint: None, None
+                size: dp(36), dp(36)
+                allow_stretch: True
+                keep_ratio: True
+
+            Label:
+                text: root.minmax_text
+                size_hint: None, None
+                width: dp(70)
+                height: dp(36)
+                halign: "center"
+                valign: "middle"
+                text_size: self.size
+                font_size: sp(14)
+                color: get_color_from_hex("#1E1E1E")
+
+            Widget:
+                size_hint_x: 1
 
         Label:
             text: root.dayparts_text
-            size_hint_x: 0.60
-            halign: "left"
+            size_hint_x: 0.45
+            halign: "right"
             valign: "middle"
             text_size: self.size
             font_size: sp(13)
+            color: get_color_from_hex("#1E1E1E")
 
     Separator:
 
