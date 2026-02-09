@@ -7,6 +7,7 @@ from kivy.properties import StringProperty
 from kivy.resources import resource_add_path
 from kivy.uix.boxlayout import BoxLayout
 from kivy.utils import platform as kivy_platform
+from kivy.clock import Clock
 
 import json
 
@@ -75,6 +76,8 @@ class WeatherRoot(BoxLayout):
 
 class WeatherApp(App):
     kv_file = str(KV_PATH)
+    _gps_timeout_event = None
+    GPS_TIMEOUT = 30  # seconds
 
     def on_start(self):
         # Only attempt to use the native GPS implementation on mobile.
@@ -85,17 +88,35 @@ class WeatherApp(App):
             try:
                 gps.configure(on_location=self.on_gps_location)
                 gps.start()
+                # Schedule a timeout to fall back to default location if GPS doesn't respond
+                self._gps_timeout_event = Clock.schedule_once(
+                    self._gps_timeout_fallback, self.GPS_TIMEOUT
+                )
             except NotImplementedError:
                 print("Plyer GPS not implemented on this platform.")
+                self._use_fallback_location()
             except Exception as e:
                 print("Failed to start GPS:", e)
+                self._use_fallback_location()
         else:
             print(f"Platform '{kivy_platform}' has no Plyer GPS; using simulated coordinates.")
-            # Call the GPS handler with a reasonable default location (for testing).
-            # You can replace these with any coordinates you want to test with.
-            self.on_gps_location(lat=48.48, lon=7.93)
+            self._use_fallback_location()
+    
+    def _gps_timeout_fallback(self, dt):
+        """Fallback handler called if GPS doesn't respond within timeout."""
+        print(f"GPS timeout after {self.GPS_TIMEOUT}s, using fallback location.")
+        self._use_fallback_location()
+    
+    def _use_fallback_location(self):
+        """Use default coordinates when GPS is unavailable."""
+        self.on_gps_location(lat=48.48, lon=7.93)
     
     def on_gps_location(self, **kwargs):
+        # Cancel the GPS timeout if it's still pending (GPS responded in time)
+        if self._gps_timeout_event:
+            self._gps_timeout_event.cancel()
+            self._gps_timeout_event = None
+        
         # Extract coordinates provided by Plyer GPS and request weather.
         lat = kwargs.get("lat")
         lon = kwargs.get("lon")
@@ -105,8 +126,41 @@ class WeatherApp(App):
         try:
             data = weather_service.get_weather(lat=lat, lon=lon)
             print(json.dumps(data, indent=2))
+            self._update_weather_display(data)
         except Exception as e:
             print("Error fetching weather with GPS coordinates:", e)
+    
+    def _update_weather_display(self, weather_data):
+        """Update the UI with weather data from the API response."""
+        try:
+            # Get the first forecast entry (current weather)
+            if weather_data and "list" in weather_data and len(weather_data["list"]) > 0:
+                current_forecast = weather_data["list"][0]
+                
+                # Extract temperature (convert from Kelvin to Celsius)
+                temp_kelvin = current_forecast.get("main", {}).get("temp")
+                if temp_kelvin is not None:
+                    temp_celsius = round(temp_kelvin - 273.15)
+                    
+                    # Find and update the TodayScreen with the new data
+                    today_screen = self.root.ids.sm.get_screen("today")
+                    today_screen.temp_text = f"{temp_celsius}°C"
+                    
+                    # Update other fields if available
+                    condition = current_forecast.get("weather", [{}])[0].get("main", "Unknown")
+                    today_screen.condition_text = condition
+                    
+                    humidity = current_forecast.get("main", {}).get("humidity")
+                    if humidity is not None:
+                        today_screen.humidity_text = f"{humidity}%"
+                    
+                    wind_speed = current_forecast.get("wind", {}).get("speed")
+                    if wind_speed is not None:
+                        today_screen.wind_text = f"{wind_speed} m/s"
+                    
+                    print(f"Weather display updated: {temp_celsius}°C, {condition}")
+        except Exception as e:
+            print(f"Error updating weather display: {e}")
 
     def navigate(self, key: str):
         self.root.navigate(key)
