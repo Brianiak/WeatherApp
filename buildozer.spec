@@ -8,9 +8,6 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,env
 source.include_patterns = icons/*,src/*
 
-# Set the application source directory
-p4a.source_dir = src
-
 version = 0.1
 requirements = python3,kivy,plyer,requests,certifi
 
