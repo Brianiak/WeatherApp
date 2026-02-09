@@ -4,11 +4,12 @@ import unittest
 from unittest.mock import patch, Mock
 from pathlib import Path
 
-import weather_service
 import coverage
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+import services.weather_service as weather_service
 
 # Initialize coverage
 cov = coverage.Coverage()
@@ -22,7 +23,7 @@ class TestWeatherService(unittest.TestCase):
     def setUp(self):
         # Ensure environment variables exist for the service to read.
         # Prevent the real .env from being loaded during tests
-        self.patcher = patch("weather_service.load_dotenv", return_value={})
+        self.patcher = patch("services.weather_service.load_dotenv", return_value={})
         self.patcher.start()
 
         os.environ.setdefault("URL", "http://example.com/api?key=")
@@ -40,7 +41,7 @@ class TestWeatherService(unittest.TestCase):
         fake.text = "{}"
         fake.json.return_value = {"ok": True}
 
-        with patch("weather_service.requests.get", return_value=fake) as mock_get:
+        with patch("services.weather_service.requests.get", return_value=fake) as mock_get:
             data = weather_service.get_weather()
             self.assertEqual(data, {"ok": True})
             # Verify the called URL contains the expected appid (API key)
@@ -54,7 +55,7 @@ class TestWeatherService(unittest.TestCase):
             self.assertEqual(query.get("appid", [None])[0], "TESTKEY")
 
     def test_network_error_raises(self):
-        with patch("weather_service.requests.get", side_effect=weather_service.requests.ConnectionError("x")):
+        with patch("services.weather_service.requests.get", side_effect=weather_service.requests.ConnectionError("x")):
             with self.assertRaises(weather_service.NetworkError):
                 weather_service.get_weather()
 
@@ -63,7 +64,7 @@ class TestWeatherService(unittest.TestCase):
         fake.status_code = 401
         fake.ok = False
         fake.text = "Unauthorized"
-        with patch("weather_service.requests.get", return_value=fake):
+        with patch("services.weather_service.requests.get", return_value=fake):
             with self.assertRaises(weather_service.APITokenExpiredError):
                 weather_service.get_weather()
 
@@ -72,7 +73,7 @@ class TestWeatherService(unittest.TestCase):
         fake.status_code = 503
         fake.ok = False
         fake.text = "Service Unavailable"
-        with patch("weather_service.requests.get", return_value=fake):
+        with patch("services.weather_service.requests.get", return_value=fake):
             with self.assertRaises(weather_service.ServiceUnavailableError):
                 weather_service.get_weather()
 
@@ -81,7 +82,7 @@ class TestWeatherService(unittest.TestCase):
         fake.status_code = 404
         fake.ok = False
         fake.text = "Not Found"
-        with patch("weather_service.requests.get", return_value=fake):
+        with patch("services.weather_service.requests.get", return_value=fake):
             with self.assertRaises(weather_service.APIRequestError):
                 weather_service.get_weather()
 
@@ -91,13 +92,13 @@ class TestWeatherService(unittest.TestCase):
         fake.ok = True
         fake.text = "not json"
         fake.json.side_effect = ValueError("invalid json")
-        with patch("weather_service.requests.get", return_value=fake):
+        with patch("services.weather_service.requests.get", return_value=fake):
             with self.assertRaises(weather_service.APIRequestError):
                 weather_service.get_weather()
 
     def test_missing_env_raises_env_not_found(self):
         # Simulate missing .env by forcing load_dotenv to raise
-        with patch("weather_service.load_dotenv", side_effect=weather_service.EnvNotFoundError()):
+        with patch("services.weather_service.load_dotenv", side_effect=weather_service.EnvNotFoundError()):
             with self.assertRaises(weather_service.EnvNotFoundError):
                 weather_service.get_weather()
 
