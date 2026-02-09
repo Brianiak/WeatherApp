@@ -10,10 +10,15 @@ The `.env` file is expected to contain `URL` and `API_KEY` variables.
 import os
 from pathlib import Path
 import requests
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
-# Import project-specific exceptions. Use a relative import where possible
+# Import project-specific exceptions. Try relative import first (when the
+# package is imported as a package), then absolute import, and as a final
+# fallback load the module from the file system. This makes imports robust
+# when running tests or executing modules directly.
 try:
-    from .exceptions import (
+    # Prefer package-relative import (works when `src` is a package)
+    from ..utils.exceptions import (
         MissingAPIConfigError,
         EnvNotFoundError,
         NetworkError,
@@ -22,15 +27,31 @@ try:
         APIRequestError,
     )
 except Exception:
-    # Fallback to absolute import to support different execution contexts
-    from exceptions import (
-        MissingAPIConfigError,
-        EnvNotFoundError,
-        NetworkError,
-        ServiceUnavailableError,
-        APITokenExpiredError,
-        APIRequestError,
-    )
+    try:
+        # Try absolute import if the package root is on sys.path
+        from utils.exceptions import (
+            MissingAPIConfigError,
+            EnvNotFoundError,
+            NetworkError,
+            ServiceUnavailableError,
+            APITokenExpiredError,
+            APIRequestError,
+        )
+    except Exception:
+        # Last-resort: load exceptions.py directly from the src/utils folder
+        import importlib.util
+
+        exceptions_path = Path(__file__).resolve().parents[1] / "utils" / "exceptions.py"
+        spec = importlib.util.spec_from_file_location("weather_exceptions", str(exceptions_path))
+        exceptions_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(exceptions_mod)
+
+        MissingAPIConfigError = exceptions_mod.MissingAPIConfigError
+        EnvNotFoundError = exceptions_mod.EnvNotFoundError
+        NetworkError = exceptions_mod.NetworkError
+        ServiceUnavailableError = exceptions_mod.ServiceUnavailableError
+        APITokenExpiredError = exceptions_mod.APITokenExpiredError
+        APIRequestError = exceptions_mod.APIRequestError
 
 
 def load_dotenv(path=None):
@@ -47,8 +68,9 @@ def load_dotenv(path=None):
     Returns a dict of loaded variables.
     """
     if path is None:
-        # Find project root (parent of the `src` folder) and look for .env there
-        path = Path(__file__).resolve().parents[1] / ".env"
+        # The project's root is two levels above this file (repo root),
+        # so look for .env there (e.g. h:/WeatherApp/.env).
+        path = Path(__file__).resolve().parents[2] / ".env"
     else:
         path = Path(path)
     if not path.exists():
@@ -88,9 +110,30 @@ def _get_config():
     return url, api_key
 
 # TODO: Insert lat and lon parameters into the URL based on user location as soon as that feature is available.
-def build_request_url(url: str, api_key: str) -> str:
-    """Return the full request URL by concatenating base URL and API key."""
-    return url + api_key
+def build_request_url(url: str, api_key: str, lat: str | float | None = None, lon: str | float | None = None) -> str:
+    """Build a request URL from a base URL, ensuring `appid`, `lat`, `lon` are set.
+
+    - Parses the provided `url` and updates query parameters.
+    - Ensures `appid` is set to `api_key`.
+    - If `lat`/`lon` are provided, sets/overwrites them in the query.
+
+    Returns the full URL string ready for requests.get().
+    """
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+
+    # Ensure API key param is present under 'appid'
+    qs["appid"] = [api_key]
+
+    # Optionally override coordinates
+    if lat is not None:
+        qs["lat"] = [str(lat)]
+    if lon is not None:
+        qs["lon"] = [str(lon)]
+
+    new_query = urlencode({k: v[0] for k, v in qs.items()})
+    new_parsed = parsed._replace(query=new_query)
+    return urlunparse(new_parsed)
 
 # TODO: Consider creating fallback logic f.ex. caching the last successful response to use when network errors occur.
 def fetch_json(request_url: str, timeout: int = 10) -> dict:
@@ -125,16 +168,15 @@ def fetch_json(request_url: str, timeout: int = 10) -> dict:
     except ValueError as exc:
         raise APIRequestError("Invalid JSON response from weather API") from exc
 
-def get_weather() -> dict:
+def get_weather(lat: str | float | None = None, lon: str | float | None = None) -> dict:
     """High-level API: return weather JSON from configured provider.
 
-    This function reads configuration, builds the request URL, performs
-    the HTTP request and returns the parsed JSON. It raises
-    `MissingAPIConfigError` when configuration is missing and propagates
-    network-related exceptions from `requests`.
+    Optional `lat` and `lon` may be provided (floats or strings) and will
+    be inserted into the request URL query parameters. If omitted, the
+    coordinates present in the configured base URL (or none) will be used.
     """
     url, api_key = _get_config()
-    request_url = build_request_url(url, api_key)
+    request_url = build_request_url(url, api_key, lat=lat, lon=lon)
     return fetch_json(request_url)
 
 

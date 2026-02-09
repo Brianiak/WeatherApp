@@ -9,9 +9,11 @@ source.include_exts = py,png,jpg,kv,atlas
 entrypoint = src/main.py
 
 version = 0.1
-requirements = python3,kivy
+requirements = python3,kivy,plyer,requests
 
 orientation = portrait
+# Permissions required for GPS and network access on Android
+android.permissions = INTERNET,ACCESS_COARSE_LOCATION,ACCESS_FINE_LOCATION
 fullscreen = 0
 android.archs = arm64-v8a
 

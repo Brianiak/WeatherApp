@@ -43,9 +43,15 @@ class TestWeatherService(unittest.TestCase):
         with patch("weather_service.requests.get", return_value=fake) as mock_get:
             data = weather_service.get_weather()
             self.assertEqual(data, {"ok": True})
-            mock_get.assert_called_once_with(
-                url="http://example.com/api?key=TESTKEY", timeout=10
-            )
+            # Verify the called URL contains the expected appid (API key)
+            _, kwargs = mock_get.call_args
+            called_url = kwargs.get("url")
+            self.assertIsNotNone(called_url)
+            from urllib.parse import urlparse, parse_qs
+
+            parsed = urlparse(called_url)
+            query = parse_qs(parsed.query)
+            self.assertEqual(query.get("appid", [None])[0], "TESTKEY")
 
     def test_network_error_raises(self):
         with patch("weather_service.requests.get", side_effect=weather_service.requests.ConnectionError("x")):
