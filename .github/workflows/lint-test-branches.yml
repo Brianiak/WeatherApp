@@ -103,14 +103,25 @@ jobs:
           JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
         run: |
           export PATH=$JAVA_HOME/bin:$PATH
-          yes | buildozer -v android debug || true
+          yes | buildozer -v android debug
+      
+      - name: List build outputs
+        if: always()
+        run: |
+          echo "Checking for APK files..."
+          find . -name "*.apk" -type f 2>/dev/null || echo "No APK files found"
+          ls -la bin/ 2>/dev/null || echo "bin/ directory not found"
+          ls -la .buildozer/android/platform/build*/bin/ 2>/dev/null || echo "buildozer bin/ not found"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: weatherapp-apk
-          path: bin/*.apk
+          path: |
+            bin/*.apk
+            .buildozer/android/platform/build-*/bin/*.apk
           retention-days: 30
+        if: always()
 
       - name: Upload build logs on failure
         if: failure()
