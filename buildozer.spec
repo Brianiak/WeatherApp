@@ -4,9 +4,8 @@ title = EigenerTitel
 package.name = eigenesPaket
 package.domain = gsog.eigeneDomain
 
-source.dir = .
-source.include_exts = py,png,jpg,kv,atlas,env
-entrypoint = src/main.py
+source.dir = src
+source.include_exts = py,png,jpg,kv,atlas
 
 version = 0.1
 requirements = python3,kivy,plyer,requests,certifi
