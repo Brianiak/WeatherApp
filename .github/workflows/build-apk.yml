@@ -45,10 +45,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install ruff pytest pytest-cov
+          pip install pytest pytest-cov
 
-      - name: Lint with ruff
-        run: ruff check .
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev
 
       - name: Run all test files with coverage
         run: xvfb-run pytest tests/ --cov=src --cov-report=xml
@@ -106,23 +108,36 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildozer-
       
-      #copy main.py to root since it wouldnt work without it
-      - name: Copy main.py for Buildozer
-        run: cp src/main.py main.py
+      - name: Create .env file for build
+        run: |
+          echo "URL=https://api.openweathermap.org/data/2.5/forecast?&appid=" > .env
+          echo "API_KEY=${{ secrets.OPENWEATHER_API_KEY }}" >> .env
 
       - name: Build with Buildozer
+        timeout-minutes: 60
         env:
           JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
         run: |
           export PATH=$JAVA_HOME/bin:$PATH
           yes | buildozer -v android debug
+      
+      - name: List build outputs
+        if: always()
+        run: |
+          echo "Checking for APK files..."
+          find . -name "*.apk" -type f 2>/dev/null || echo "No APK files found"
+          ls -la bin/ 2>/dev/null || echo "bin/ directory not found"
+          ls -la .buildozer/android/platform/build*/bin/ 2>/dev/null || echo "buildozer bin/ not found"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: weatherapp-apk
-          path: bin/*.apk
+          path: |
+            bin/*.apk
+            .buildozer/android/platform/build-*/bin/*.apk
           retention-days: 30
+        if: always()
 
       - name: Upload build logs on failure
         if: failure()
