@@ -1,7 +1,7 @@
 [app]
 
-title = EigenerTitel
-package.name = eigenesPaket
+title = Weatherly
+package.name = weatherly
 package.domain = gsog.eigeneDomain
 
 source.dir = .
