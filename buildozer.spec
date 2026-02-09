@@ -4,9 +4,9 @@ title = Weatherly
 package.name = weatherly
 package.domain = gsog.eigeneDomain
 
-source.dir = .
+source.dir = src
 source.include_exts = py,png,jpg,kv,atlas,env
-source.include_patterns = icons/*,src/*
+source.include_patterns = ../icons/*.png,services/*,utils/*
 
 version = 0.1
 requirements = python3,kivy,plyer,requests,certifi
@@ -17,8 +17,8 @@ android.permissions = INTERNET,ACCESS_COARSE_LOCATION,ACCESS_FINE_LOCATION,ACCES
 fullscreen = 0
 
 # App icon and presplash
-icon.filename = icons/weather-frog-removebg-preview.png
-presplash.filename = icons/weather-frog-removebg-preview.png
+icon.filename = %(source.dir)s/../icons/weather-frog-removebg-preview.png
+presplash.filename = %(source.dir)s/../icons/weather-frog-removebg-preview.png
 
 # Support 64-bit ARM devices (most modern phones)
 android.archs = arm64-v8a
