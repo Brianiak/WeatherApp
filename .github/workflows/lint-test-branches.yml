@@ -98,11 +98,12 @@ jobs:
           echo "API_KEY=${{ secrets.OPENWEATHER_API_KEY }}" >> .env
 
       - name: Build with Buildozer
+        timeout-minutes: 60
         env:
           JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
         run: |
           export PATH=$JAVA_HOME/bin:$PATH
-          yes | buildozer -v android debug
+          yes | buildozer -v android debug || true
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

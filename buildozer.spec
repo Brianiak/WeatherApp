@@ -16,8 +16,8 @@ orientation = portrait
 android.permissions = INTERNET,ACCESS_COARSE_LOCATION,ACCESS_FINE_LOCATION
 fullscreen = 0
 
-# Support both 64-bit and 32-bit ARM devices
-android.archs = arm64-v8a, armeabi-v7a
+# Support 64-bit ARM devices (most modern phones)
+android.archs = arm64-v8a
 
 # Android API configuration
 android.api = 33
