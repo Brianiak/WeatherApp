@@ -5,11 +5,10 @@ from unittest.mock import patch, Mock
 from pathlib import Path
 
 import coverage
+import services.weather_service as weather_service
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
-
-import services.weather_service as weather_service
 
 # Initialize coverage
 cov = coverage.Coverage()
