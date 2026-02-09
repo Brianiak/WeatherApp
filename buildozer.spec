@@ -9,7 +9,7 @@ source.include_exts = py,png,jpg,kv,atlas,env
 entrypoint = src/main.py
 
 version = 0.1
-requirements = python3==3.11,kivy==2.3.0,plyer==2.1.0,requests==2.31.0,certifi
+requirements = python3,kivy,plyer,requests,certifi
 
 orientation = portrait
 # Permissions required for GPS and network access on Android
