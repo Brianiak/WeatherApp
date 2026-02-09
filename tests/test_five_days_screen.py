@@ -4,16 +4,16 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-import unittest
-from unittest.mock import patch
+import unittest  # noqa: E402
+from unittest.mock import patch  # noqa: E402
 
-import coverage
-from kivy.metrics import dp
-from kivy.core.window import Window
-from kivy.clock import Clock
+import coverage  # noqa: E402
+from kivy.metrics import dp  # noqa: E402
+from kivy.core.window import Window  # noqa: E402
+from kivy.clock import Clock  # noqa: E402
 
 from five_days_screen import FiveDaysScreen, ROW_HEIGHT  # noqa: E402
-import services.weather_service as weather_service
+import services.weather_service as weather_service  # noqa: E402, F401
 
 # Initialize coverage
 cov = coverage.Coverage()
