@@ -354,17 +354,21 @@
 
             BoxLayout:
                 orientation: "vertical"
-                spacing: dp(14)
-                size_hint_y: 1
+                spacing: dp(10)
+                size_hint: 1, 1
 
                 SegmentedControl:
                     id: nav
                     size_hint_y: None
                     height: dp(46)
 
+                Widget:
+                    size_hint_y: 1
+
                 RecycleView:
                     id: rv
-                    size_hint_y: 1
+                    size_hint_y: None
+                    height: dp(140)
                     bar_width: dp(6)
                     scroll_type: ["bars", "content"]
                     viewclass: "ForecastRow"
@@ -378,19 +382,22 @@
                         height: self.minimum_height
                         spacing: dp(0)
 
-    Image:
-        source: "icons/weather-frog-removebg-preview.png"
-        size_hint: None, None
-        size: dp(120), dp(120)
-        pos_hint: {"right": 0.70, "y": 0.05}
+                Widget:
+                    size_hint_y: 1
 
-        canvas.before:
-            Color:
-                rgba: (1, 1, 1, 1)
-            RoundedRectangle:
-                pos: self.pos
-                size: self.size
-                radius: [dp(15), ]
+                AnchorLayout:
+                    id: frog_slot
+                    anchor_x: "right"
+                    anchor_y: "bottom"
+                    size_hint_y: None
+                    height: dp(120)
+
+                    Image:
+                        source: "icons/weather-frog-removebg-preview.png"
+                        size_hint: None, None
+                        size: dp(110), dp(110)
+                        allow_stretch: True
+                        keep_ratio: True
 
 
 <WeatherRoot>:
