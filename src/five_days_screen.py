@@ -18,9 +18,10 @@ from datetime import datetime
 from kivy.metrics import dp
 from kivy.properties import ListProperty
 from kivy.clock import Clock
+from kivy.app import App
 
 from base_screen import BaseWeatherScreen
-from services import weather_service
+import services.weather_service as weather_service
 
 ROW_HEIGHT = dp(66)
 
@@ -76,8 +77,13 @@ class FiveDaysScreen(BaseWeatherScreen):
         Falls back to hardcoded data if API call fails.
         """
         try:
-            # Call the weather API forecast endpoint
-            data = weather_service.get_weather()
+            # Get current GPS coordinates from the app instance
+            app = App.get_running_app()
+            lat = app.current_lat
+            lon = app.current_lon
+            
+            # Call the weather API forecast endpoint with GPS coordinates
+            data = weather_service.get_weather(lat=lat, lon=lon)
             
             # Process the forecast data
             self.forecast_items = self._process_forecast_data(data)
