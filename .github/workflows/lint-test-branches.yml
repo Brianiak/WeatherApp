@@ -94,8 +94,8 @@ jobs:
       
       - name: Create .env file for build
         run: |
-          echo "URL=https://api.openweathermap.org/data/2.5/forecast?&appid=" > src/.env
-          echo "API_KEY=${{ secrets.OPENWEATHER_API_KEY }}" >> src/.env
+          echo "URL=https://api.openweathermap.org/data/2.5/forecast?&appid=" > .env
+          echo "API_KEY=${{ secrets.OPENWEATHER_API_KEY }}" >> .env
 
       - name: Build with Buildozer
         timeout-minutes: 60

@@ -4,16 +4,27 @@ title = EigenerTitel
 package.name = eigenesPaket
 package.domain = gsog.eigeneDomain
 
-source.dir = src
-source.include_exts = py,png,jpg,kv,atlas
+source.dir = .
+source.include_exts = py,png,jpg,kv,atlas,env
+source.include_patterns = icons/*,src/*
+
+# Set the application source directory
+p4a.source_dir = src
 
 version = 0.1
 requirements = python3,kivy,plyer,requests,certifi
 
 orientation = portrait
 # Permissions required for GPS and network access on Android
-android.permissions = INTERNET,ACCESS_COARSE_LOCATION,ACCESS_FINE_LOCATION
+android.permissions = INTERNET,ACCESS_COARSE_LOCATION,ACCESS_FINE_LOCATION,ACCESS_BACKGROUND_LOCATION,WAKE_LOCK
 fullscreen = 0
+
+# App icon and presplash
+icon.filename = icons/weather-frog-removebg-preview.png
+presplash.filename = icons/weather-frog-removebg-preview.png
+
+# Support 64-bit ARM devices (most modern phones)
+presplash.filename = icons/weather-frog-removebg-preview.png
 
 # Support 64-bit ARM devices (most modern phones)
 android.archs = arm64-v8a
