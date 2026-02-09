@@ -188,12 +188,20 @@ class TestLoadDotenv(unittest.TestCase):
 
     def test_load_dotenv_with_custom_path(self):
         """Test loading .env from custom path"""
-        # Create a temporary .env content
         env_content = "TEST_VAR=test_value\nANOTHER_VAR=another_value"
+        env_lines = env_content.split('\n')
         
-        with patch("builtins.open", create=True) as mock_open:
-            mock_open.return_value.__enter__.return_value = env_content.split('\n')
-            with patch("pathlib.Path.exists", return_value=True):
+        mock_file = Mock()
+        mock_file.__enter__.return_value = env_lines
+        mock_file.__exit__.return_value = None
+        
+        with patch("builtins.open", return_value=mock_file):
+            with patch("services.weather_service.Path") as mock_path_class:
+                mock_path_obj = Mock()
+                mock_path_obj.exists.return_value = True
+                mock_path_obj.open.return_value = mock_file
+                mock_path_class.return_value = mock_path_obj
+                
                 result = weather_service.load_dotenv("/custom/path/.env")
                 self.assertIn("TEST_VAR", result)
 
@@ -206,9 +214,17 @@ class TestLoadDotenv(unittest.TestCase):
             "ANOTHER_KEY=another_value"
         ]
         
-        with patch("builtins.open", create=True) as mock_open:
-            mock_open.return_value.__enter__.return_value = env_lines
-            with patch("pathlib.Path.exists", return_value=True):
+        mock_file = Mock()
+        mock_file.__enter__.return_value = env_lines
+        mock_file.__exit__.return_value = None
+        
+        with patch("builtins.open", return_value=mock_file):
+            with patch("services.weather_service.Path") as mock_path_class:
+                mock_path_obj = Mock()
+                mock_path_obj.exists.return_value = True
+                mock_path_obj.open.return_value = mock_file
+                mock_path_class.return_value = mock_path_obj
+                
                 result = weather_service.load_dotenv("/custom/.env")
                 self.assertIn("VALID_KEY", result)
                 self.assertIn("ANOTHER_KEY", result)
@@ -216,7 +232,11 @@ class TestLoadDotenv(unittest.TestCase):
 
     def test_load_dotenv_raises_on_missing_file(self):
         """Test that EnvNotFoundError is raised for missing .env"""
-        with patch("pathlib.Path.exists", return_value=False):
+        with patch("services.weather_service.Path") as mock_path_class:
+            mock_path_obj = Mock()
+            mock_path_obj.exists.return_value = False
+            mock_path_class.return_value = mock_path_obj
+            
             with self.assertRaises(weather_service.EnvNotFoundError):
                 weather_service.load_dotenv("/nonexistent/.env")
 
