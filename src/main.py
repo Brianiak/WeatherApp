@@ -276,10 +276,26 @@ class WeatherApp(App):
             print("Error fetching weather with coordinates:", e)
             if self.last_location_label:
                 self._set_location_labels(self.last_location_label)
-            elif track_as_gps:
-                self._set_location_labels("GPS erkannt, Standortname nicht verfuegbar")
             else:
-                self._set_location_labels("Standort nicht verfuegbar")
+                self._set_location_labels(self._location_label_from_error(e, track_as_gps))
+
+    def _location_label_from_error(self, error: Exception, track_as_gps: bool) -> str:
+        # Map frequent backend failures to user-visible hints.
+        if isinstance(error, weather_service.EnvNotFoundError):
+            return "Standortname nicht verfuegbar (.env fehlt)"
+        if isinstance(error, weather_service.MissingAPIConfigError):
+            return "Standortname nicht verfuegbar (API Konfig fehlt)"
+        if isinstance(error, weather_service.APITokenExpiredError):
+            return "Standortname nicht verfuegbar (API Key ungueltig)"
+        if isinstance(error, weather_service.NetworkError):
+            return "Standortname nicht verfuegbar (kein Internet)"
+        if isinstance(error, weather_service.ServiceUnavailableError):
+            return "Standortname nicht verfuegbar (Wetterdienst down)"
+        if isinstance(error, weather_service.APIRequestError):
+            return "Standortname nicht verfuegbar (API Anfragefehler)"
+        if track_as_gps:
+            return "GPS erkannt, Standortname nicht verfuegbar"
+        return "Standort nicht verfuegbar"
 
     def _set_location_labels(self, label: str):
         if not self.root or "sm" not in self.root.ids:

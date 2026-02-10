@@ -249,9 +249,19 @@ def fetch_json(request_url: str, timeout: int = 10) -> dict:
         raise APIRequestError(f"API request failed: HTTP {res.status_code}: {res.text}")
 
     try:
-        return res.json()
+        payload = res.json()
     except ValueError as exc:
         raise APIRequestError("Invalid JSON response from weather API") from exc
+
+    # Some weather APIs (incl. OpenWeather variants) may encode failures in
+    # JSON `cod` even when HTTP transport completed. Treat non-200 as errors.
+    if isinstance(payload, dict):
+        cod = payload.get("cod")
+        if cod is not None and str(cod) != "200":
+            message = payload.get("message", "unknown API error")
+            raise APIRequestError(f"API payload error cod={cod}: {message}")
+
+    return payload
 
 def get_weather(lat: str | float | None = None, lon: str | float | None = None) -> dict:
     """High-level API: return weather JSON from configured provider.
