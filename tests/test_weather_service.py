@@ -98,6 +98,8 @@ class TestWeatherService(unittest.TestCase):
 
     def test_missing_env_raises_env_not_found(self):
         # Simulate missing .env by forcing load_dotenv to raise
+        os.environ.pop("URL", None)
+        os.environ.pop("API_KEY", None)
         with patch("services.weather_service.load_dotenv", side_effect=weather_service.EnvNotFoundError()):
             with self.assertRaises(weather_service.EnvNotFoundError):
                 weather_service.get_weather()

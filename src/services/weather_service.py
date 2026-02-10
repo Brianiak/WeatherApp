@@ -107,8 +107,26 @@ def _load_dotenv_from_android_assets(asset_name: str = ".env") -> dict | None:
     try:
         PythonActivity = autoclass("org.kivy.android.PythonActivity")
         assets = PythonActivity.mActivity.getAssets()
-        stream = assets.open(asset_name)
     except Exception:
+        return None
+
+    # Depending on bootstrap/layout, add_assets can appear at slightly
+    # different relative paths in APK assets.
+    asset_candidates = (
+        asset_name,
+        f"./{asset_name}",
+        f"app/{asset_name}",
+        f"private/{asset_name}",
+    )
+    stream = None
+    for candidate in asset_candidates:
+        try:
+            stream = assets.open(candidate)
+            break
+        except Exception:
+            stream = None
+
+    if stream is None:
         return None
 
     try:
