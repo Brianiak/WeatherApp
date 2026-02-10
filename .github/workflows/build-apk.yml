@@ -68,12 +68,14 @@ jobs:
         if: always()
 
       - name: Upload coverage reports
+        if: ${{ always() && env.CODECOV_TOKEN != '' }}
         uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+          token: ${{ env.CODECOV_TOKEN }}
           files: ./coverage.xml
           fail_ci_if_error: false
-        if: ${{ always() && secrets.CODECOV_TOKEN != '' }}
 
   build-android:
     name: Build for Android
