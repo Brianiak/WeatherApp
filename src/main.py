@@ -128,7 +128,7 @@ class WeatherApp(App):
         try:
             gps.configure(on_location=self.on_gps_location, on_status=self.on_gps_status)
             # Request frequent updates to move away from stale last-known data quickly.
-            gps.start(minTime=1000, minDistance=1)
+            gps.start(minTime=1000, minDistance=0)
             self._gps_timeout_event = Clock.schedule_once(
                 self._gps_timeout_fallback, self.GPS_TIMEOUT
             )
@@ -238,6 +238,7 @@ class WeatherApp(App):
             return
 
         print("GPS location:", kwargs)
+        self._set_location_labels("GPS erkannt, Standort wird geladen...")
         self._apply_location(lat, lon, track_as_gps=True)
 
     def _should_refresh_weather(self) -> bool:
@@ -256,6 +257,10 @@ class WeatherApp(App):
     ):
         self.current_lat = lat
         self.current_lon = lon
+        if track_as_gps:
+            # Persist successful GPS coordinate acquisition independently from API success.
+            self._save_last_known_location(lat, lon)
+
         if not force_refresh and not self._should_refresh_weather():
             return
 
@@ -269,6 +274,12 @@ class WeatherApp(App):
             self._refresh_forecast_screen()
         except Exception as e:
             print("Error fetching weather with coordinates:", e)
+            if self.last_location_label:
+                self._set_location_labels(self.last_location_label)
+            elif track_as_gps:
+                self._set_location_labels("GPS erkannt, Standortname nicht verfuegbar")
+            else:
+                self._set_location_labels("Standort nicht verfuegbar")
 
     def _set_location_labels(self, label: str):
         if not self.root or "sm" not in self.root.ids:

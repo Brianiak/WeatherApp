@@ -54,6 +54,81 @@ except Exception:
         APIRequestError = exceptions_mod.APIRequestError
 
 
+def _default_env_paths() -> list[Path]:
+    """Return candidate .env paths for desktop and packaged Android runs."""
+    module_path = Path(__file__).resolve()
+    candidates: list[Path] = [
+        module_path.parents[2] / ".env",  # repo-root layout (local dev/tests)
+        module_path.parents[1] / ".env",  # packaged app root (.../app/.env)
+        module_path.parent / ".env",      # same directory as service module
+        Path.cwd() / ".env",              # current working directory
+    ]
+
+    # python-for-android environment hints
+    for env_key in ("ANDROID_ARGUMENT", "ANDROID_PRIVATE"):
+        raw = os.getenv(env_key)
+        if not raw:
+            continue
+        base = Path(raw)
+        candidates.append(base / ".env")
+        candidates.append(base / "app" / ".env")
+
+    # De-duplicate while preserving order.
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(candidate)
+    return unique
+
+
+def _parse_env_lines(lines) -> dict:
+    env = {}
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            k, v = line.split("=", 1)
+            env[k.strip()] = v.strip()
+    return env
+
+
+def _load_dotenv_from_android_assets(asset_name: str = ".env") -> dict | None:
+    """Best-effort read for .env embedded via buildozer android.add_assets."""
+    try:
+        from jnius import autoclass
+    except Exception:
+        return None
+
+    try:
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        assets = PythonActivity.mActivity.getAssets()
+        stream = assets.open(asset_name)
+    except Exception:
+        return None
+
+    try:
+        raw = bytearray()
+        while True:
+            value = stream.read()
+            if value == -1:
+                break
+            raw.append(value & 0xFF)
+    finally:
+        try:
+            stream.close()
+        except Exception:
+            pass
+
+    if not raw:
+        return {}
+    return _parse_env_lines(raw.decode("utf-8", errors="replace").splitlines())
+
+
 def load_dotenv(path=None):
     """Load key=value pairs from a .env file into the process environment.
 
@@ -67,26 +142,33 @@ def load_dotenv(path=None):
 
     Returns a dict of loaded variables.
     """
-    if path is None:
-        # The project's root is two levels above this file (repo root),
-        # so look for .env there (e.g. h:/WeatherApp/.env).
-        path = Path(__file__).resolve().parents[2] / ".env"
+    if path is not None:
+        candidates = [Path(path)]
     else:
-        path = Path(path)
-    if not path.exists():
-        raise EnvNotFoundError(f".env file not found at: {path}")
-    env = {}
-    with path.open() as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" in line:
-                k, v = line.split("=", 1)
-                env[k.strip()] = v.strip()
-    # Inject loaded variables into os.environ so other parts of the app can use them
-    os.environ.update(env)
-    return env
+        candidates = _default_env_paths()
+
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+
+        env = {}
+        with candidate.open(encoding="utf-8") as f:
+            env = _parse_env_lines(f)
+
+        # Inject loaded variables into os.environ so other parts of the app can use them
+        os.environ.update(env)
+        return env
+
+    if path is None:
+        env = _load_dotenv_from_android_assets(".env")
+        if env is not None:
+            os.environ.update(env)
+            return env
+
+    searched = ", ".join(str(candidate) for candidate in candidates)
+    raise EnvNotFoundError(
+        f".env file not found. Looked in: {searched} and Android assets (.env)"
+    )
 
 # NOTE: Do not load the .env file at import time. Loading is deferred until
 # the service is actually used (via `_get_config()` / `get_weather()`), so
@@ -99,9 +181,12 @@ def _get_config():
     Configuration is validated when the service is actually used (via
     `get_weather()`), which avoids side-effects at import time.
     """
-    # Ensure environment variables are loaded from the project's .env file
-    # prior to reading them. This will raise EnvNotFoundError if the .env
-    # file does not exist, which callers can catch if they wish.
+    url = os.getenv("URL")
+    api_key = os.getenv("API_KEY")
+    if url and api_key:
+        return url, api_key
+
+    # If values are not in process env, try loading from .env.
     load_dotenv()
     url = os.getenv("URL")
     api_key = os.getenv("API_KEY")
