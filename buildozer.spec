@@ -13,7 +13,7 @@ requirements = python3,kivy,plyer,requests,certifi
 
 orientation = portrait
 # Permissions required for GPS and network access on Android
-android.permissions = INTERNET,ACCESS_COARSE_LOCATION,ACCESS_FINE_LOCATION,ACCESS_BACKGROUND_LOCATION,WAKE_LOCK
+android.permissions = INTERNET,ACCESS_COARSE_LOCATION,ACCESS_FINE_LOCATION,WAKE_LOCK
 # Bundle root .env into APK assets (keep .env outside src/)
 android.add_assets = .env:.
 fullscreen = 0
