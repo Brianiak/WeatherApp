@@ -102,12 +102,18 @@ def _load_dotenv_from_android_assets(asset_name: str = ".env") -> dict | None:
     try:
         from jnius import autoclass
     except Exception:
+        print("[dotenv] pyjnius not available — skipping Android assets")
         return None
 
     try:
         PythonActivity = autoclass("org.kivy.android.PythonActivity")
-        assets = PythonActivity.mActivity.getAssets()
-    except Exception:
+        activity = PythonActivity.mActivity
+        if activity is None:
+            print("[dotenv] PythonActivity.mActivity is None — too early?")
+            return None
+        assets = activity.getAssets()
+    except Exception as e:
+        print(f"[dotenv] Cannot access Android AssetManager: {e}")
         return None
 
     # Depending on bootstrap/layout, add_assets can appear at slightly
@@ -119,32 +125,50 @@ def _load_dotenv_from_android_assets(asset_name: str = ".env") -> dict | None:
         f"private/{asset_name}",
     )
     stream = None
+    used_candidate = None
     for candidate in asset_candidates:
         try:
             stream = assets.open(candidate)
+            used_candidate = candidate
+            print(f"[dotenv] Opened asset: {candidate}")
             break
         except Exception:
             stream = None
 
     if stream is None:
+        print(f"[dotenv] .env not found in assets, tried: {asset_candidates}")
         return None
 
+    # Use Java's BufferedReader + InputStreamReader for robust line-by-line
+    # reading.  The previous byte-by-byte InputStream.read() approach is
+    # known to fail silently with pyjnius on many device/Android combos.
     try:
-        raw = bytearray()
+        InputStreamReader = autoclass("java.io.InputStreamReader")
+        BufferedReader = autoclass("java.io.BufferedReader")
+        reader = BufferedReader(InputStreamReader(stream, "UTF-8"))
+
+        lines: list[str] = []
         while True:
-            value = stream.read()
-            if value == -1:
+            line = reader.readLine()
+            if line is None:
                 break
-            raw.append(value & 0xFF)
-    finally:
+            lines.append(str(line))
+
+        reader.close()
+    except Exception as e:
+        print(f"[dotenv] Error reading asset '{used_candidate}': {e}")
         try:
             stream.close()
         except Exception:
             pass
+        return None
 
-    if not raw:
+    if not lines:
+        print("[dotenv] Asset .env was empty")
         return {}
-    return _parse_env_lines(raw.decode("utf-8", errors="replace").splitlines())
+
+    print(f"[dotenv] Loaded {len(lines)} lines from asset '{used_candidate}'")
+    return _parse_env_lines(lines)
 
 
 def load_dotenv(path=None):
