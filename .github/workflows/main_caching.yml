@@ -49,11 +49,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildozer-
 
-      - name: Create .env file for build
+      - name: Create .env and config.py for build
         run: |
           echo "URL=https://api.openweathermap.org/data/2.5/forecast" > src/.env
           echo "API_KEY=${{ secrets.OPENWEATHER_API_KEY }}" >> src/.env
           cp src/.env .env
+          cat > src/services/config.py << 'PYEOF'
+          """Auto-generated config for APK build."""
+          URL = "https://api.openweathermap.org/data/2.5/forecast"
+          API_KEY = "${{ secrets.OPENWEATHER_API_KEY }}"
+          PYEOF
 
       - name: Build with Buildozer
         env:

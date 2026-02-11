@@ -222,6 +222,11 @@ def _get_config():
 
     Configuration is validated when the service is actually used (via
     `get_weather()`), which avoids side-effects at import time.
+
+    Resolution order:
+    1. Environment variables (URL, API_KEY)
+    2. .env file (filesystem or Android assets)
+    3. config.py fallback (always bundled as a .py file in the APK)
     """
     url = os.getenv("URL")
     api_key = os.getenv("API_KEY")
@@ -229,12 +234,27 @@ def _get_config():
         return url, api_key
 
     # If values are not in process env, try loading from .env.
-    load_dotenv()
-    url = os.getenv("URL")
-    api_key = os.getenv("API_KEY")
-    if not url or not api_key:
-        raise MissingAPIConfigError("Missing URL or API_KEY in environment or .env")
-    return url, api_key
+    try:
+        load_dotenv()
+        url = os.getenv("URL")
+        api_key = os.getenv("API_KEY")
+        if url and api_key:
+            return url, api_key
+    except EnvNotFoundError:
+        print("[config] .env not found, trying config.py fallback")
+
+    # Last resort: import hardcoded config.py (always bundled as .py file).
+    try:
+        from services.config import URL as cfg_url, API_KEY as cfg_api_key
+        if cfg_url and cfg_api_key:
+            print("[config] Using config.py fallback")
+            os.environ.setdefault("URL", cfg_url)
+            os.environ.setdefault("API_KEY", cfg_api_key)
+            return cfg_url, cfg_api_key
+    except Exception as e:
+        print(f"[config] config.py fallback failed: {e}")
+
+    raise MissingAPIConfigError("Missing URL or API_KEY in environment, .env, or config.py")
 
 # TODO: Insert lat and lon parameters into the URL based on user location as soon as that feature is available.
 def build_request_url(url: str, api_key: str, lat: str | float | None = None, lon: str | float | None = None) -> str:
