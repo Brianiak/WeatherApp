@@ -49,6 +49,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildozer-
 
+      - name: Create .env file for build
+        run: |
+          echo "URL=https://api.openweathermap.org/data/2.5/forecast" > src/.env
+          echo "API_KEY=${{ secrets.OPENWEATHER_API_KEY }}" >> src/.env
+          cp src/.env .env
+
       - name: Build with Buildozer
         env:
           JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64

@@ -6,7 +6,7 @@ package.domain = gsog.eigeneDomain
 
 source.dir = src
 source.include_exts = py,png,jpg,kv,atlas,env
-source.include_patterns = icons/*.png,services/*,utils/*
+source.include_patterns = icons/*.png,services/*,utils/*,.env
 
 version = 0.1
 requirements = python3,kivy,plyer,requests,certifi
@@ -14,8 +14,6 @@ requirements = python3,kivy,plyer,requests,certifi
 orientation = portrait
 # Permissions required for GPS and network access on Android
 android.permissions = INTERNET,ACCESS_COARSE_LOCATION,ACCESS_FINE_LOCATION,WAKE_LOCK
-# Bundle root .env into APK assets
-android.add_assets = .env:.
 fullscreen = 0
 
 # App icon and presplash
