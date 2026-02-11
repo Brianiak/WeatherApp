@@ -54,6 +54,123 @@ except Exception:
         APIRequestError = exceptions_mod.APIRequestError
 
 
+def _default_env_paths() -> list[Path]:
+    """Return candidate .env paths for desktop and packaged Android runs."""
+    module_path = Path(__file__).resolve()
+    candidates: list[Path] = [
+        module_path.parents[2] / ".env",  # repo-root layout (local dev/tests)
+        module_path.parents[1] / ".env",  # packaged app root (.../app/.env)
+        module_path.parent / ".env",      # same directory as service module
+        Path.cwd() / ".env",              # current working directory
+    ]
+
+    # python-for-android environment hints
+    for env_key in ("ANDROID_ARGUMENT", "ANDROID_PRIVATE"):
+        raw = os.getenv(env_key)
+        if not raw:
+            continue
+        base = Path(raw)
+        candidates.append(base / ".env")
+        candidates.append(base / "app" / ".env")
+
+    # De-duplicate while preserving order.
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(candidate)
+    return unique
+
+
+def _parse_env_lines(lines) -> dict:
+    env = {}
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            k, v = line.split("=", 1)
+            env[k.strip()] = v.strip()
+    return env
+
+
+def _load_dotenv_from_android_assets(asset_name: str = ".env") -> dict | None:
+    """Best-effort read for .env embedded via buildozer android.add_assets."""
+    try:
+        from jnius import autoclass
+    except Exception:
+        print("[dotenv] pyjnius not available — skipping Android assets")
+        return None
+
+    try:
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        activity = PythonActivity.mActivity
+        if activity is None:
+            print("[dotenv] PythonActivity.mActivity is None — too early?")
+            return None
+        assets = activity.getAssets()
+    except Exception as e:
+        print(f"[dotenv] Cannot access Android AssetManager: {e}")
+        return None
+
+    # Depending on bootstrap/layout, add_assets can appear at slightly
+    # different relative paths in APK assets.
+    asset_candidates = (
+        asset_name,
+        f"./{asset_name}",
+        f"app/{asset_name}",
+        f"private/{asset_name}",
+    )
+    stream = None
+    used_candidate = None
+    for candidate in asset_candidates:
+        try:
+            stream = assets.open(candidate)
+            used_candidate = candidate
+            print(f"[dotenv] Opened asset: {candidate}")
+            break
+        except Exception:
+            stream = None
+
+    if stream is None:
+        print(f"[dotenv] .env not found in assets, tried: {asset_candidates}")
+        return None
+
+    # Use Java's BufferedReader + InputStreamReader for robust line-by-line
+    # reading.  The previous byte-by-byte InputStream.read() approach is
+    # known to fail silently with pyjnius on many device/Android combos.
+    try:
+        InputStreamReader = autoclass("java.io.InputStreamReader")
+        BufferedReader = autoclass("java.io.BufferedReader")
+        reader = BufferedReader(InputStreamReader(stream, "UTF-8"))
+
+        lines: list[str] = []
+        while True:
+            line = reader.readLine()
+            if line is None:
+                break
+            lines.append(str(line))
+
+        reader.close()
+    except Exception as e:
+        print(f"[dotenv] Error reading asset '{used_candidate}': {e}")
+        try:
+            stream.close()
+        except Exception:
+            pass
+        return None
+
+    if not lines:
+        print("[dotenv] Asset .env was empty")
+        return {}
+
+    print(f"[dotenv] Loaded {len(lines)} lines from asset '{used_candidate}'")
+    return _parse_env_lines(lines)
+
+
 def load_dotenv(path=None):
     """Load key=value pairs from a .env file into the process environment.
 
@@ -67,26 +184,33 @@ def load_dotenv(path=None):
 
     Returns a dict of loaded variables.
     """
-    if path is None:
-        # The project's root is two levels above this file (repo root),
-        # so look for .env there (e.g. h:/WeatherApp/.env).
-        path = Path(__file__).resolve().parents[2] / ".env"
+    if path is not None:
+        candidates = [Path(path)]
     else:
-        path = Path(path)
-    if not path.exists():
-        raise EnvNotFoundError(f".env file not found at: {path}")
-    env = {}
-    with path.open() as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" in line:
-                k, v = line.split("=", 1)
-                env[k.strip()] = v.strip()
-    # Inject loaded variables into os.environ so other parts of the app can use them
-    os.environ.update(env)
-    return env
+        candidates = _default_env_paths()
+
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+
+        env = {}
+        with candidate.open(encoding="utf-8") as f:
+            env = _parse_env_lines(f)
+
+        # Inject loaded variables into os.environ so other parts of the app can use them
+        os.environ.update(env)
+        return env
+
+    if path is None:
+        env = _load_dotenv_from_android_assets(".env")
+        if env is not None:
+            os.environ.update(env)
+            return env
+
+    searched = ", ".join(str(candidate) for candidate in candidates)
+    raise EnvNotFoundError(
+        f".env file not found. Looked in: {searched} and Android assets (.env)"
+    )
 
 # NOTE: Do not load the .env file at import time. Loading is deferred until
 # the service is actually used (via `_get_config()` / `get_weather()`), so
@@ -98,16 +222,39 @@ def _get_config():
 
     Configuration is validated when the service is actually used (via
     `get_weather()`), which avoids side-effects at import time.
+
+    Resolution order:
+    1. Environment variables (URL, API_KEY)
+    2. .env file (filesystem or Android assets)
+    3. config.py fallback (always bundled as a .py file in the APK)
     """
-    # Ensure environment variables are loaded from the project's .env file
-    # prior to reading them. This will raise EnvNotFoundError if the .env
-    # file does not exist, which callers can catch if they wish.
-    load_dotenv()
     url = os.getenv("URL")
     api_key = os.getenv("API_KEY")
-    if not url or not api_key:
-        raise MissingAPIConfigError("Missing URL or API_KEY in environment or .env")
-    return url, api_key
+    if url and api_key:
+        return url, api_key
+
+    # If values are not in process env, try loading from .env.
+    try:
+        load_dotenv()
+        url = os.getenv("URL")
+        api_key = os.getenv("API_KEY")
+        if url and api_key:
+            return url, api_key
+    except EnvNotFoundError:
+        print("[config] .env not found, trying config.py fallback")
+
+    # Last resort: import hardcoded config.py (always bundled as .py file).
+    try:
+        from services.config import URL as cfg_url, API_KEY as cfg_api_key
+        if cfg_url and cfg_api_key:
+            print("[config] Using config.py fallback")
+            os.environ.setdefault("URL", cfg_url)
+            os.environ.setdefault("API_KEY", cfg_api_key)
+            return cfg_url, cfg_api_key
+    except Exception as e:
+        print(f"[config] config.py fallback failed: {e}")
+
+    raise MissingAPIConfigError("Missing URL or API_KEY in environment, .env, or config.py")
 
 # TODO: Insert lat and lon parameters into the URL based on user location as soon as that feature is available.
 def build_request_url(url: str, api_key: str, lat: str | float | None = None, lon: str | float | None = None) -> str:
@@ -164,9 +311,19 @@ def fetch_json(request_url: str, timeout: int = 10) -> dict:
         raise APIRequestError(f"API request failed: HTTP {res.status_code}: {res.text}")
 
     try:
-        return res.json()
+        payload = res.json()
     except ValueError as exc:
         raise APIRequestError("Invalid JSON response from weather API") from exc
+
+    # Some weather APIs (incl. OpenWeather variants) may encode failures in
+    # JSON `cod` even when HTTP transport completed. Treat non-200 as errors.
+    if isinstance(payload, dict):
+        cod = payload.get("cod")
+        if cod is not None and str(cod) != "200":
+            message = payload.get("message", "unknown API error")
+            raise APIRequestError(f"API payload error cod={cod}: {message}")
+
+    return payload
 
 def get_weather(lat: str | float | None = None, lon: str | float | None = None) -> dict:
     """High-level API: return weather JSON from configured provider.

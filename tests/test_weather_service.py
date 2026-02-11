@@ -96,11 +96,20 @@ class TestWeatherService(unittest.TestCase):
             with self.assertRaises(weather_service.APIRequestError):
                 weather_service.get_weather()
 
-    def test_missing_env_raises_env_not_found(self):
-        # Simulate missing .env by forcing load_dotenv to raise
+    def test_missing_env_falls_back_to_config(self):
+        # When .env is missing and env vars are unset, config.py fallback is used.
+        os.environ.pop("URL", None)
+        os.environ.pop("API_KEY", None)
         with patch("services.weather_service.load_dotenv", side_effect=weather_service.EnvNotFoundError()):
-            with self.assertRaises(weather_service.EnvNotFoundError):
-                weather_service.get_weather()
+            # config.py fallback should provide URL and API_KEY, so get_weather
+            # will proceed to make an HTTP call.  Mock that call to avoid real requests.
+            fake = Mock()
+            fake.status_code = 200
+            fake.ok = True
+            fake.json.return_value = {"cod": "200", "list": []}
+            with patch("services.weather_service.requests.get", return_value=fake):
+                data = weather_service.get_weather()
+                self.assertIsInstance(data, dict)
 
 
 # Dummy Tests for coverage
@@ -298,14 +307,38 @@ class TestErrorHandling(unittest.TestCase):
     def test_missing_url_raises_error(self):
         """Test that missing URL raises MissingAPIConfigError"""
         os.environ.pop("URL")
-        with self.assertRaises(weather_service.MissingAPIConfigError):
-            weather_service.get_weather()
+        os.environ.pop("API_KEY", None)
+        with patch("services.weather_service.load_dotenv", side_effect=weather_service.EnvNotFoundError()):
+            with patch("services.weather_service._get_config.__module__", "services.weather_service"):
+                # Also block config.py fallback import
+                import services.config
+                orig_url = services.config.URL
+                orig_key = services.config.API_KEY
+                services.config.URL = ""
+                services.config.API_KEY = ""
+                try:
+                    with self.assertRaises(weather_service.MissingAPIConfigError):
+                        weather_service.get_weather()
+                finally:
+                    services.config.URL = orig_url
+                    services.config.API_KEY = orig_key
 
     def test_missing_api_key_raises_error(self):
         """Test that missing API_KEY raises MissingAPIConfigError"""
         os.environ.pop("API_KEY")
-        with self.assertRaises(weather_service.MissingAPIConfigError):
-            weather_service.get_weather()
+        os.environ.pop("URL", None)
+        with patch("services.weather_service.load_dotenv", side_effect=weather_service.EnvNotFoundError()):
+            import services.config
+            orig_url = services.config.URL
+            orig_key = services.config.API_KEY
+            services.config.URL = ""
+            services.config.API_KEY = ""
+            try:
+                with self.assertRaises(weather_service.MissingAPIConfigError):
+                    weather_service.get_weather()
+            finally:
+                services.config.URL = orig_url
+                services.config.API_KEY = orig_key
 
     def test_400_bad_request_raises_error(self):
         """Test that 400 status code raises APIRequestError"""

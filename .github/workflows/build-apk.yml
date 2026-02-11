@@ -55,12 +55,27 @@ jobs:
       - name: Run all test files with coverage
         run: xvfb-run pytest tests/ --cov=src --cov-report=xml
 
-      - name: Upload coverage reports
-        uses: codecov/codecov-action@v3
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
         with:
-          files: ./.coverage
-          fail_ci_if_error: false
+          name: coverage-reports-main
+          path: |
+            coverage.xml
+            .coverage
+            htmlcov/
+          if-no-files-found: warn
+          retention-days: 14
         if: always()
+
+      - name: Upload coverage reports
+        if: ${{ always() && env.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false
 
   build-android:
     name: Build for Android
@@ -108,10 +123,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildozer-
       
-      - name: Create .env file for build
+      - name: Use repository .env for build
         run: |
-          echo "URL=https://api.openweathermap.org/data/2.5/forecast?&appid=" > .env
-          echo "API_KEY=${{ secrets.OPENWEATHER_API_KEY }}" >> .env
+          if [ ! -f src/.env ]; then
+            echo "ERROR: src/.env fehlt. Bitte URL und API_KEY in src/.env hinterlegen."
+            exit 1
+          fi
+          cp src/.env .env
 
       - name: Build with Buildozer
         timeout-minutes: 60

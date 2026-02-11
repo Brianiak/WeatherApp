@@ -49,6 +49,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildozer-
 
+      - name: Use repository .env for build
+        run: |
+          if [ ! -f src/.env ]; then
+            echo "ERROR: src/.env fehlt. Bitte URL und API_KEY in src/.env hinterlegen."
+            exit 1
+          fi
+          cp src/.env .env
+
       - name: Build with Buildozer
         env:
           JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
