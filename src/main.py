@@ -469,20 +469,8 @@ class WeatherApp(App):
             )
             return
 
-        if track_as_gps:
-            # Persist successful GPS coordinate acquisition independently from API success.
-            self._save_last_known_location(lat, lon)
-
-        if not force_refresh and not self._should_refresh_weather():
-            print(
-                "Skipping weather refresh due to interval throttle "
-                f"({self.WEATHER_REFRESH_INTERVAL}s)."
-            )
-            return
-
         try:
             data = weather_service.get_weather(lat=lat, lon=lon)
-            self._log_location_roundtrip(lat, lon, data)
             self._log_location_roundtrip(lat, lon, data)
             print(json.dumps(data, indent=2))
             location_label = self._update_location_labels_from_weather(
@@ -492,7 +480,6 @@ class WeatherApp(App):
             if track_as_gps:
                 self._save_last_known_location(lat, lon, label=location_label)
             self._update_weather_display(data)
-            self._refresh_forecast_screen()
             self._refresh_forecast_screen()
         except Exception as e:
             print("Error fetching weather with coordinates:", e)
