@@ -30,6 +30,8 @@ MANIFEST
 # PyInstaller
 *.manifest
 *.spec
+# Keep Buildozer config under version control for Android builds
+!buildozer.spec
 
 # Virtual environments
 venv/

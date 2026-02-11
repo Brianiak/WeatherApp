@@ -107,16 +107,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildozer-
       
-      - name: Create .env and config.py for build
+      - name: Use repository .env for build
         run: |
-          echo "URL=https://api.openweathermap.org/data/2.5/forecast" > src/.env
-          echo "API_KEY=${{ secrets.OPENWEATHER_API_KEY }}" >> src/.env
+          if [ ! -f src/.env ]; then
+            echo "ERROR: src/.env fehlt. Bitte URL und API_KEY in src/.env hinterlegen."
+            exit 1
+          fi
           cp src/.env .env
-          cat > src/services/config.py << 'PYEOF'
-          """Auto-generated config for APK build."""
-          URL = "https://api.openweathermap.org/data/2.5/forecast"
-          API_KEY = "${{ secrets.OPENWEATHER_API_KEY }}"
-          PYEOF
 
       - name: Build with Buildozer
         timeout-minutes: 60
