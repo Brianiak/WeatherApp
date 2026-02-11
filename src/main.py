@@ -85,6 +85,7 @@ class WeatherApp(App):
     last_gps_lat = None
     last_gps_lon = None
     last_location_label = None
+    _has_live_gps_fix = False
 
     def on_start(self):
         self._load_last_known_location()
@@ -107,7 +108,7 @@ class WeatherApp(App):
             from android.permissions import Permission, check_permission, request_permissions
 
             required = [Permission.ACCESS_COARSE_LOCATION, Permission.ACCESS_FINE_LOCATION]
-            if all(check_permission(permission) for permission in required):
+            if any(check_permission(permission) for permission in required):
                 self._start_gps()
                 return
 
@@ -117,7 +118,13 @@ class WeatherApp(App):
             self._use_last_known_location_or_default("android permission flow failed")
 
     def _on_android_permissions_result(self, permissions, grants):
-        if all(grants):
+        grants = [bool(grant) for grant in grants]
+        if any(grants):
+            if not all(grants):
+                print(
+                    "Location permission partially granted "
+                    "(coarse location only). Continuing with available precision."
+                )
             self._start_gps()
             return
 
@@ -151,6 +158,7 @@ class WeatherApp(App):
 
     def _use_fallback_location(self):
         """Use default coordinates when GPS is unavailable."""
+        print("Using default fallback coordinates: lat=51.5074, lon=-0.1278 (London)")
         self._apply_location(51.5074, -0.1278)
 
     def _last_location_cache_path(self) -> Path:
@@ -237,9 +245,30 @@ class WeatherApp(App):
             self._use_last_known_location_or_default("invalid GPS coordinates")
             return
 
+        if not self._coordinates_in_range(lat, lon):
+            print(f"Ignoring out-of-range GPS coordinates: lat={lat}, lon={lon}")
+            self._use_last_known_location_or_default("out-of-range GPS coordinates")
+            return
+
+        accuracy = kwargs.get("accuracy")
+        if accuracy is not None:
+            print(f"GPS parsed coordinates: lat={lat:.6f}, lon={lon:.6f}, accuracy={accuracy}")
+        else:
+            print(f"GPS parsed coordinates: lat={lat:.6f}, lon={lon:.6f}")
+
         print("GPS location:", kwargs)
+        is_first_live_fix = not self._has_live_gps_fix
+        self._has_live_gps_fix = True
         self._set_location_labels("GPS erkannt, Standort wird geladen...")
-        self._apply_location(lat, lon, track_as_gps=True)
+        self._apply_location(
+            lat,
+            lon,
+            track_as_gps=True,
+            force_refresh=is_first_live_fix,
+        )
+
+    def _coordinates_in_range(self, lat: float, lon: float) -> bool:
+        return -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0
 
     def _should_refresh_weather(self) -> bool:
         now = time.monotonic()
@@ -255,6 +284,11 @@ class WeatherApp(App):
         force_refresh: bool = False,
         track_as_gps: bool = False,
     ):
+        source = "live GPS" if track_as_gps else "fallback/cached location"
+        print(
+            f"Applying {source}: lat={lat:.6f}, lon={lon:.6f}, "
+            f"force_refresh={force_refresh}"
+        )
         self.current_lat = lat
         self.current_lon = lon
         if track_as_gps:
@@ -262,10 +296,15 @@ class WeatherApp(App):
             self._save_last_known_location(lat, lon)
 
         if not force_refresh and not self._should_refresh_weather():
+            print(
+                "Skipping weather refresh due to interval throttle "
+                f"({self.WEATHER_REFRESH_INTERVAL}s)."
+            )
             return
 
         try:
             data = weather_service.get_weather(lat=lat, lon=lon)
+            self._log_location_roundtrip(lat, lon, data)
             print(json.dumps(data, indent=2))
             location_label = self._update_location_labels_from_weather(data)
             if track_as_gps:
@@ -278,6 +317,50 @@ class WeatherApp(App):
                 self._set_location_labels(self.last_location_label)
             else:
                 self._set_location_labels(self._location_label_from_error(e, track_as_gps))
+
+    def _log_location_roundtrip(self, requested_lat: float, requested_lon: float, weather_data: dict):
+        if not isinstance(weather_data, dict):
+            return
+
+        city = weather_data.get("city", {})
+        if not isinstance(city, dict):
+            return
+
+        coord = city.get("coord", {})
+        if not isinstance(coord, dict):
+            return
+
+        api_lat = coord.get("lat")
+        api_lon = coord.get("lon")
+        if api_lat is None or api_lon is None:
+            return
+
+        try:
+            api_lat = float(api_lat)
+            api_lon = float(api_lon)
+        except (TypeError, ValueError):
+            return
+
+        delta_lat = abs(api_lat - requested_lat)
+        delta_lon = abs(api_lon - requested_lon)
+        city_name = city.get("name")
+        country = city.get("country")
+        city_label = (
+            f"{city_name}, {country}" if city_name and country else city_name or "unknown"
+        )
+
+        print(
+            "[location-check] requested="
+            f"({requested_lat:.6f}, {requested_lon:.6f}), "
+            f"api_city={city_label}, "
+            f"api_coord=({api_lat:.6f}, {api_lon:.6f}), "
+            f"delta=({delta_lat:.4f}, {delta_lon:.4f})"
+        )
+        if delta_lat > 1.0 or delta_lon > 1.0:
+            print(
+                "[location-check] Significant difference between requested coordinates "
+                "and API city coordinates."
+            )
 
     def _location_label_from_error(self, error: Exception, track_as_gps: bool) -> str:
         # Map frequent backend failures to user-visible hints.
