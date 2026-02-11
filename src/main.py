@@ -89,7 +89,7 @@ class WeatherApp(App):
     _gps_timeout_event = None
     GPS_TIMEOUT = 45  # seconds
     WEATHER_REFRESH_INTERVAL = 60  # seconds
-    SHOW_COORDS_IN_LOCATION_LABEL = True
+    SHOW_LOCATION_SOURCE_PREFIX = False
     _last_weather_refresh_ts = 0.0
     current_lat = None
     current_lon = None
@@ -314,6 +314,7 @@ class WeatherApp(App):
     def _use_fallback_location(self):
         """Use default coordinates when GPS is unavailable."""
         print("Using default fallback coordinates: lat=51.5074, lon=-0.1278 (London)")
+        self._set_location_labels(self._format_location_label("Standort wird geladen...", False))
         self._apply_location(51.5074, -0.1278)
 
     def _last_location_cache_path(self) -> Path:
@@ -425,9 +426,11 @@ class WeatherApp(App):
     def _coordinates_in_range(self, lat: float, lon: float) -> bool:
         return -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0
 
-    def _coordinate_label(self, lat: float, lon: float, is_live_gps: bool) -> str:
+    def _format_location_label(self, label: str, is_live_gps: bool) -> str:
+        if not self.SHOW_LOCATION_SOURCE_PREFIX:
+            return label
         source = "GPS" if is_live_gps else "Fallback"
-        return f"{source}: lat={lat:.5f}, lon={lon:.5f}"
+        return f"{source}: {label}"
 
     def _should_refresh_weather(self) -> bool:
         now = time.monotonic()
@@ -444,13 +447,10 @@ class WeatherApp(App):
         track_as_gps: bool = False,
     ):
         source = "live GPS" if track_as_gps else "fallback/cached location"
-        coordinate_label = self._coordinate_label(lat, lon, is_live_gps=track_as_gps)
         print(
             f"Applying {source}: lat={lat:.6f}, lon={lon:.6f}, "
             f"force_refresh={force_refresh}"
         )
-        if self.SHOW_COORDS_IN_LOCATION_LABEL:
-            self._set_location_labels(coordinate_label)
         self.current_lat = lat
         self.current_lon = lon
         if track_as_gps:
@@ -468,19 +468,17 @@ class WeatherApp(App):
             data = weather_service.get_weather(lat=lat, lon=lon)
             self._log_location_roundtrip(lat, lon, data)
             print(json.dumps(data, indent=2))
-            if self.SHOW_COORDS_IN_LOCATION_LABEL:
-                location_label = coordinate_label
-            else:
-                location_label = self._update_location_labels_from_weather(data)
+            location_label = self._update_location_labels_from_weather(
+                data,
+                track_as_gps=track_as_gps,
+            )
             if track_as_gps:
                 self._save_last_known_location(lat, lon, label=location_label)
             self._update_weather_display(data)
             self._refresh_forecast_screen()
         except Exception as e:
             print("Error fetching weather with coordinates:", e)
-            if self.SHOW_COORDS_IN_LOCATION_LABEL:
-                self._set_location_labels(coordinate_label)
-            elif self.last_location_label:
+            if self.last_location_label:
                 self._set_location_labels(self.last_location_label)
             else:
                 self._set_location_labels(self._location_label_from_error(e, track_as_gps))
@@ -558,15 +556,23 @@ class WeatherApp(App):
                 if hasattr(screen, "location_text"):
                     screen.location_text = label
 
-    def _update_location_labels_from_weather(self, weather_data: dict) -> str | None:
+    def _update_location_labels_from_weather(
+        self,
+        weather_data: dict,
+        track_as_gps: bool = False,
+    ) -> str | None:
         label = self._extract_location_label(weather_data)
         if not label:
-            label = "Standort nicht verfuegbar"
-            self._set_location_labels(label)
+            fallback_label = self._format_location_label(
+                "Standort nicht verfuegbar",
+                is_live_gps=track_as_gps,
+            )
+            self._set_location_labels(fallback_label)
             return None
 
-        self._set_location_labels(label)
-        return label
+        display_label = self._format_location_label(label, is_live_gps=track_as_gps)
+        self._set_location_labels(display_label)
+        return display_label
 
     def _extract_location_label(self, weather_data: dict) -> str | None:
         city = weather_data.get("city", {}).get("name")
