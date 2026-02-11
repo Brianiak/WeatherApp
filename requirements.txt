@@ -1,8 +1,8 @@
 # API
 requests==2.32.5
 
-# GPS
-plyer==2.1.0
+# Android bridge
+pyjnius==1.6.1; platform_system != "Windows"
 
 # Core dependencies
 kivy>=2.3.1

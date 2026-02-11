@@ -2,14 +2,25 @@ from pathlib import Path
 import json
 import time
 
-from plyer import gps  # python -m pip install plyer requests
-
 from kivy.app import App
+from kivy.clock import Clock
 from kivy.clock import Clock
 from kivy.properties import StringProperty
 from kivy.resources import resource_add_path
 from kivy.uix.boxlayout import BoxLayout
 from kivy.utils import platform as kivy_platform
+
+try:
+    from jnius import autoclass, PythonJavaClass, java_method
+except Exception:  # pragma: no cover - desktop/test environments
+    autoclass = None
+    PythonJavaClass = object
+
+    def java_method(_signature):
+        def decorator(func):
+            return func
+
+        return decorator
 
 from base_screen import BaseWeatherScreen
 from five_days_screen import FiveDaysScreen  # noqa: F401
@@ -32,12 +43,15 @@ class ForecastRow(BoxLayout):
 class TodayScreen(BaseWeatherScreen):
     location_text = StringProperty("Standort wird ermittelt...")
     temp_text = StringProperty("13\u00b0")
+    location_text = StringProperty("Standort wird ermittelt...")
+    temp_text = StringProperty("13\u00b0")
     condition_text = StringProperty("Clouds")
     humidity_text = StringProperty("82%")
     wind_text = StringProperty("6 km/h")
 
 
 class TomorrowScreen(BaseWeatherScreen):
+    location_text = StringProperty("Standort wird ermittelt...")
     location_text = StringProperty("Standort wird ermittelt...")
     condition_text = StringProperty("Clouds")
     minmax_text = StringProperty("Min. Temp / Max. Temp")
@@ -79,7 +93,7 @@ class WeatherApp(App):
     _gps_timeout_event = None
     GPS_TIMEOUT = 45  # seconds
     WEATHER_REFRESH_INTERVAL = 60  # seconds
-    SHOW_COORDS_IN_LOCATION_LABEL = True
+    SHOW_LOCATION_SOURCE_PREFIX = False
     _last_weather_refresh_ts = 0.0
     current_lat = None
     current_lon = None
@@ -87,21 +101,22 @@ class WeatherApp(App):
     last_gps_lon = None
     last_location_label = None
     _has_live_gps_fix = False
+    _location_manager = None
+    _location_listener = None
 
     def on_start(self):
         self._load_last_known_location()
 
-        # Use native GPS only on mobile devices.
+        # Use Android LocationManager via pyjnius on Android only.
         if kivy_platform == "android":
             self._start_android_location_flow()
-        elif kivy_platform == "ios":
-            self._start_gps()
         else:
             print(
-                f"Platform '{kivy_platform}' has no Plyer GPS; using simulated coordinates."
+                f"Platform '{kivy_platform}' has no Android LocationManager backend; "
+                "using fallback coordinates."
             )
             self._use_last_known_location_or_default(
-                "platform without native GPS support"
+                "platform without Android GPS support"
             )
 
     def _start_android_location_flow(self):
@@ -133,19 +148,162 @@ class WeatherApp(App):
         self._use_last_known_location_or_default("location permission denied")
 
     def _start_gps(self):
+        if kivy_platform != "android":
+            print(f"GPS via pyjnius is Android-only (platform={kivy_platform}).")
+            self._use_last_known_location_or_default("GPS not available on this platform")
+            return
+
+        if autoclass is None:
+            print("pyjnius import failed; cannot start Android GPS.")
+            self._use_last_known_location_or_default("pyjnius unavailable")
+            return
+
         try:
-            gps.configure(on_location=self.on_gps_location, on_status=self.on_gps_status)
-            # Request frequent updates to move away from stale last-known data quickly.
-            gps.start(minTime=1000, minDistance=0)
+            if self._location_manager is None:
+                self._init_android_location_manager()
+            self._start_android_location_updates()
             self._gps_timeout_event = Clock.schedule_once(
                 self._gps_timeout_fallback, self.GPS_TIMEOUT
             )
-        except NotImplementedError:
-            print("Plyer GPS not implemented on this platform.")
-            self._use_last_known_location_or_default("plyer GPS not implemented")
         except Exception as e:
             print("Failed to start GPS:", e)
             self._use_last_known_location_or_default("failed to start GPS")
+
+    def _init_android_location_manager(self):
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        Context = autoclass("android.content.Context")
+        activity = PythonActivity.mActivity
+        if activity is None:
+            raise RuntimeError("PythonActivity.mActivity is None")
+
+        self._location_manager = activity.getSystemService(Context.LOCATION_SERVICE)
+        if self._location_manager is None:
+            raise RuntimeError("Could not obtain Android LocationManager")
+
+        app_ref = self
+
+        class AndroidLocationListener(PythonJavaClass):
+            __javainterfaces__ = ["android/location/LocationListener"]
+            __javacontext__ = "app"
+
+            def __init__(self):
+                super().__init__()
+
+            @java_method("(Landroid/location/Location;)V")
+            def onLocationChanged(self, location):
+                if location is None:
+                    return
+                lat = float(location.getLatitude())
+                lon = float(location.getLongitude())
+                provider = str(location.getProvider()) if location.getProvider() else "unknown"
+                accuracy = None
+                try:
+                    accuracy = float(location.getAccuracy())
+                except Exception:
+                    accuracy = None
+
+                Clock.schedule_once(
+                    lambda _dt: app_ref.on_gps_location(
+                        lat=lat,
+                        lon=lon,
+                        accuracy=accuracy,
+                        provider=provider,
+                    ),
+                    0,
+                )
+
+            @java_method("(Ljava/lang/String;)V")
+            def onProviderDisabled(self, provider):
+                provider_name = str(provider)
+                Clock.schedule_once(
+                    lambda _dt: app_ref.on_gps_status(
+                        "provider", f"{provider_name} disabled"
+                    ),
+                    0,
+                )
+
+            @java_method("(Ljava/lang/String;)V")
+            def onProviderEnabled(self, provider):
+                provider_name = str(provider)
+                Clock.schedule_once(
+                    lambda _dt: app_ref.on_gps_status(
+                        "provider", f"{provider_name} enabled"
+                    ),
+                    0,
+                )
+
+            @java_method("(Ljava/lang/String;ILandroid/os/Bundle;)V")
+            def onStatusChanged(self, provider, status, extras):
+                provider_name = str(provider)
+                Clock.schedule_once(
+                    lambda _dt: app_ref.on_gps_status(
+                        "status", f"{provider_name} status={status}"
+                    ),
+                    0,
+                )
+
+        # Keep strong reference to avoid GC while Java still calls into Python.
+        self._location_listener = AndroidLocationListener()
+
+    def _enabled_android_providers(self) -> list[str]:
+        LocationManager = autoclass("android.location.LocationManager")
+        providers: list[str] = []
+        for provider in (LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER):
+            try:
+                if self._location_manager.isProviderEnabled(provider):
+                    providers.append(provider)
+            except Exception as e:
+                print(f"Could not query provider '{provider}': {e}")
+        return providers
+
+    def _start_android_location_updates(self):
+        Looper = autoclass("android.os.Looper")
+        providers = self._enabled_android_providers()
+        if not providers:
+            raise RuntimeError("No enabled Android location providers (GPS/NETWORK)")
+
+        print(f"Starting Android location updates via providers: {providers}")
+        for provider in providers:
+            self._location_manager.requestLocationUpdates(
+                provider,
+                1000,
+                0.0,
+                self._location_listener,
+                Looper.getMainLooper(),
+            )
+
+        self._emit_android_last_known_location(providers)
+
+    def _emit_android_last_known_location(self, providers: list[str]):
+        for provider in providers:
+            try:
+                last = self._location_manager.getLastKnownLocation(provider)
+            except Exception as e:
+                print(f"Could not read last known location for provider '{provider}': {e}")
+                continue
+
+            if last is None:
+                continue
+
+            try:
+                lat = float(last.getLatitude())
+                lon = float(last.getLongitude())
+            except Exception as e:
+                print(f"Invalid last known location from provider '{provider}': {e}")
+                continue
+
+            accuracy = None
+            try:
+                accuracy = float(last.getAccuracy())
+            except Exception:
+                accuracy = None
+
+            print(
+                "Using Android last known location from provider "
+                f"'{provider}': lat={lat:.6f}, lon={lon:.6f}, accuracy={accuracy}"
+            )
+            self.on_gps_location(lat=lat, lon=lon, accuracy=accuracy, provider=provider)
+            return
 
     def _gps_timeout_fallback(self, _dt):
         # If no fix arrives in time, use last successful GPS or default.
@@ -160,6 +318,7 @@ class WeatherApp(App):
     def _use_fallback_location(self):
         """Use default coordinates when GPS is unavailable."""
         print("Using default fallback coordinates: lat=51.5074, lon=-0.1278 (London)")
+        self._set_location_labels(self._format_location_label("Standort wird geladen...", False))
         self._apply_location(51.5074, -0.1278)
 
     def _last_location_cache_path(self) -> Path:
@@ -227,9 +386,11 @@ class WeatherApp(App):
 
     def on_gps_location(self, **kwargs):
         # Cancel timeout once GPS callback responds.
+        # Cancel timeout once GPS callback responds.
         if self._gps_timeout_event:
             self._gps_timeout_event.cancel()
             self._gps_timeout_event = None
+
 
         lat = kwargs.get("lat")
         lon = kwargs.get("lon")
@@ -271,9 +432,11 @@ class WeatherApp(App):
     def _coordinates_in_range(self, lat: float, lon: float) -> bool:
         return -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0
 
-    def _coordinate_label(self, lat: float, lon: float, is_live_gps: bool) -> str:
+    def _format_location_label(self, label: str, is_live_gps: bool) -> str:
+        if not self.SHOW_LOCATION_SOURCE_PREFIX:
+            return label
         source = "GPS" if is_live_gps else "Fallback"
-        return f"{source}: lat={lat:.5f}, lon={lon:.5f}"
+        return f"{source}: {label}"
 
     def _should_refresh_weather(self) -> bool:
         now = time.monotonic()
@@ -290,15 +453,23 @@ class WeatherApp(App):
         track_as_gps: bool = False,
     ):
         source = "live GPS" if track_as_gps else "fallback/cached location"
-        coordinate_label = self._coordinate_label(lat, lon, is_live_gps=track_as_gps)
         print(
             f"Applying {source}: lat={lat:.6f}, lon={lon:.6f}, "
             f"force_refresh={force_refresh}"
         )
-        if self.SHOW_COORDS_IN_LOCATION_LABEL:
-            self._set_location_labels(coordinate_label)
         self.current_lat = lat
         self.current_lon = lon
+        if track_as_gps:
+            # Persist successful GPS coordinate acquisition independently from API success.
+            self._save_last_known_location(lat, lon)
+
+        if not force_refresh and not self._should_refresh_weather():
+            print(
+                "Skipping weather refresh due to interval throttle "
+                f"({self.WEATHER_REFRESH_INTERVAL}s)."
+            )
+            return
+
         if track_as_gps:
             # Persist successful GPS coordinate acquisition independently from API success.
             self._save_last_known_location(lat, lon)
@@ -313,20 +484,20 @@ class WeatherApp(App):
         try:
             data = weather_service.get_weather(lat=lat, lon=lon)
             self._log_location_roundtrip(lat, lon, data)
+            self._log_location_roundtrip(lat, lon, data)
             print(json.dumps(data, indent=2))
-            if self.SHOW_COORDS_IN_LOCATION_LABEL:
-                location_label = coordinate_label
-            else:
-                location_label = self._update_location_labels_from_weather(data)
+            location_label = self._update_location_labels_from_weather(
+                data,
+                track_as_gps=track_as_gps,
+            )
             if track_as_gps:
                 self._save_last_known_location(lat, lon, label=location_label)
             self._update_weather_display(data)
             self._refresh_forecast_screen()
+            self._refresh_forecast_screen()
         except Exception as e:
             print("Error fetching weather with coordinates:", e)
-            if self.SHOW_COORDS_IN_LOCATION_LABEL:
-                self._set_location_labels(coordinate_label)
-            elif self.last_location_label:
+            if self.last_location_label:
                 self._set_location_labels(self.last_location_label)
             else:
                 self._set_location_labels(self._location_label_from_error(e, track_as_gps))
@@ -404,15 +575,23 @@ class WeatherApp(App):
                 if hasattr(screen, "location_text"):
                     screen.location_text = label
 
-    def _update_location_labels_from_weather(self, weather_data: dict) -> str | None:
+    def _update_location_labels_from_weather(
+        self,
+        weather_data: dict,
+        track_as_gps: bool = False,
+    ) -> str | None:
         label = self._extract_location_label(weather_data)
         if not label:
-            label = "Standort nicht verfuegbar"
-            self._set_location_labels(label)
+            fallback_label = self._format_location_label(
+                "Standort nicht verfuegbar",
+                is_live_gps=track_as_gps,
+            )
+            self._set_location_labels(fallback_label)
             return None
 
-        self._set_location_labels(label)
-        return label
+        display_label = self._format_location_label(label, is_live_gps=track_as_gps)
+        self._set_location_labels(display_label)
+        return display_label
 
     def _extract_location_label(self, weather_data: dict) -> str | None:
         city = weather_data.get("city", {}).get("name")
@@ -447,9 +626,11 @@ class WeatherApp(App):
             if weather_data and "list" in weather_data and len(weather_data["list"]) > 0:
                 current_forecast = weather_data["list"][0]
 
+
                 temp_kelvin = current_forecast.get("main", {}).get("temp")
                 if temp_kelvin is not None:
                     temp_celsius = round(temp_kelvin - 273.15)
+
 
                     today_screen = self.root.ids.sm.get_screen("today")
                     today_screen.temp_text = f"{temp_celsius}\u00b0C"
@@ -457,15 +638,24 @@ class WeatherApp(App):
                     condition = current_forecast.get("weather", [{}])[0].get(
                         "main", "Unknown"
                     )
+                    today_screen.temp_text = f"{temp_celsius}\u00b0C"
+
+                    condition = current_forecast.get("weather", [{}])[0].get(
+                        "main", "Unknown"
+                    )
                     today_screen.condition_text = condition
+
 
                     humidity = current_forecast.get("main", {}).get("humidity")
                     if humidity is not None:
                         today_screen.humidity_text = f"{humidity}%"
 
+
                     wind_speed = current_forecast.get("wind", {}).get("speed")
                     if wind_speed is not None:
                         today_screen.wind_text = f"{wind_speed} m/s"
+
+                    print(f"Weather display updated: {temp_celsius}\u00b0C, {condition}")
 
                     print(f"Weather display updated: {temp_celsius}\u00b0C, {condition}")
         except Exception as e:
@@ -473,8 +663,9 @@ class WeatherApp(App):
 
     def on_stop(self):
         try:
-            if kivy_platform in ("android", "ios"):
-                gps.stop()
+            if kivy_platform == "android" and self._location_manager and self._location_listener:
+                self._location_manager.removeUpdates(self._location_listener)
+                print("Stopped Android location updates.")
         except Exception:
             pass
 
@@ -485,6 +676,7 @@ class WeatherApp(App):
 if __name__ == "__main__":
     # Print current weather JSON once when running as a script, then start the app.
     def print_weather_json():
+        """Call the weather service and print the returned JSON."""
         """Call the weather service and print the returned JSON."""
         try:
             data = weather_service.get_weather()
