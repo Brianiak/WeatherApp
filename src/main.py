@@ -4,7 +4,6 @@ import time
 
 from kivy.app import App
 from kivy.clock import Clock
-from kivy.clock import Clock
 from kivy.properties import StringProperty
 from kivy.resources import resource_add_path
 from kivy.uix.boxlayout import BoxLayout
