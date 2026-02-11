@@ -79,6 +79,7 @@ class WeatherApp(App):
     _gps_timeout_event = None
     GPS_TIMEOUT = 45  # seconds
     WEATHER_REFRESH_INTERVAL = 60  # seconds
+    SHOW_COORDS_IN_LOCATION_LABEL = True
     _last_weather_refresh_ts = 0.0
     current_lat = None
     current_lon = None
@@ -270,6 +271,10 @@ class WeatherApp(App):
     def _coordinates_in_range(self, lat: float, lon: float) -> bool:
         return -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0
 
+    def _coordinate_label(self, lat: float, lon: float, is_live_gps: bool) -> str:
+        source = "GPS" if is_live_gps else "Fallback"
+        return f"{source}: lat={lat:.5f}, lon={lon:.5f}"
+
     def _should_refresh_weather(self) -> bool:
         now = time.monotonic()
         if now - self._last_weather_refresh_ts < self.WEATHER_REFRESH_INTERVAL:
@@ -285,10 +290,13 @@ class WeatherApp(App):
         track_as_gps: bool = False,
     ):
         source = "live GPS" if track_as_gps else "fallback/cached location"
+        coordinate_label = self._coordinate_label(lat, lon, is_live_gps=track_as_gps)
         print(
             f"Applying {source}: lat={lat:.6f}, lon={lon:.6f}, "
             f"force_refresh={force_refresh}"
         )
+        if self.SHOW_COORDS_IN_LOCATION_LABEL:
+            self._set_location_labels(coordinate_label)
         self.current_lat = lat
         self.current_lon = lon
         if track_as_gps:
@@ -306,14 +314,19 @@ class WeatherApp(App):
             data = weather_service.get_weather(lat=lat, lon=lon)
             self._log_location_roundtrip(lat, lon, data)
             print(json.dumps(data, indent=2))
-            location_label = self._update_location_labels_from_weather(data)
+            if self.SHOW_COORDS_IN_LOCATION_LABEL:
+                location_label = coordinate_label
+            else:
+                location_label = self._update_location_labels_from_weather(data)
             if track_as_gps:
                 self._save_last_known_location(lat, lon, label=location_label)
             self._update_weather_display(data)
             self._refresh_forecast_screen()
         except Exception as e:
             print("Error fetching weather with coordinates:", e)
-            if self.last_location_label:
+            if self.SHOW_COORDS_IN_LOCATION_LABEL:
+                self._set_location_labels(coordinate_label)
+            elif self.last_location_label:
                 self._set_location_labels(self.last_location_label)
             else:
                 self._set_location_labels(self._location_label_from_error(e, track_as_gps))
