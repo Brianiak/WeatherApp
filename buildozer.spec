@@ -9,7 +9,7 @@ source.include_exts = py,png,jpg,kv,atlas,env
 source.include_patterns = icons/*.png,services/*,utils/*,.env
 
 version = 0.1
-requirements = python3,kivy,plyer,requests,certifi
+requirements = python3,kivy,pyjnius,requests,certifi
 
 orientation = portrait
 # Permissions required for GPS and network access on Android

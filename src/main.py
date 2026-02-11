@@ -2,14 +2,24 @@ from pathlib import Path
 import json
 import time
 
-from plyer import gps  # python -m pip install plyer requests
-
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.properties import StringProperty
 from kivy.resources import resource_add_path
 from kivy.uix.boxlayout import BoxLayout
 from kivy.utils import platform as kivy_platform
+
+try:
+    from jnius import autoclass, PythonJavaClass, java_method
+except Exception:  # pragma: no cover - desktop/test environments
+    autoclass = None
+    PythonJavaClass = object
+
+    def java_method(_signature):
+        def decorator(func):
+            return func
+
+        return decorator
 
 from base_screen import BaseWeatherScreen
 from five_days_screen import FiveDaysScreen  # noqa: F401
@@ -87,21 +97,22 @@ class WeatherApp(App):
     last_gps_lon = None
     last_location_label = None
     _has_live_gps_fix = False
+    _location_manager = None
+    _location_listener = None
 
     def on_start(self):
         self._load_last_known_location()
 
-        # Use native GPS only on mobile devices.
+        # Use Android LocationManager via pyjnius on Android only.
         if kivy_platform == "android":
             self._start_android_location_flow()
-        elif kivy_platform == "ios":
-            self._start_gps()
         else:
             print(
-                f"Platform '{kivy_platform}' has no Plyer GPS; using simulated coordinates."
+                f"Platform '{kivy_platform}' has no Android LocationManager backend; "
+                "using fallback coordinates."
             )
             self._use_last_known_location_or_default(
-                "platform without native GPS support"
+                "platform without Android GPS support"
             )
 
     def _start_android_location_flow(self):
@@ -133,19 +144,162 @@ class WeatherApp(App):
         self._use_last_known_location_or_default("location permission denied")
 
     def _start_gps(self):
+        if kivy_platform != "android":
+            print(f"GPS via pyjnius is Android-only (platform={kivy_platform}).")
+            self._use_last_known_location_or_default("GPS not available on this platform")
+            return
+
+        if autoclass is None:
+            print("pyjnius import failed; cannot start Android GPS.")
+            self._use_last_known_location_or_default("pyjnius unavailable")
+            return
+
         try:
-            gps.configure(on_location=self.on_gps_location, on_status=self.on_gps_status)
-            # Request frequent updates to move away from stale last-known data quickly.
-            gps.start(minTime=1000, minDistance=0)
+            if self._location_manager is None:
+                self._init_android_location_manager()
+            self._start_android_location_updates()
             self._gps_timeout_event = Clock.schedule_once(
                 self._gps_timeout_fallback, self.GPS_TIMEOUT
             )
-        except NotImplementedError:
-            print("Plyer GPS not implemented on this platform.")
-            self._use_last_known_location_or_default("plyer GPS not implemented")
         except Exception as e:
             print("Failed to start GPS:", e)
             self._use_last_known_location_or_default("failed to start GPS")
+
+    def _init_android_location_manager(self):
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        Context = autoclass("android.content.Context")
+        activity = PythonActivity.mActivity
+        if activity is None:
+            raise RuntimeError("PythonActivity.mActivity is None")
+
+        self._location_manager = activity.getSystemService(Context.LOCATION_SERVICE)
+        if self._location_manager is None:
+            raise RuntimeError("Could not obtain Android LocationManager")
+
+        app_ref = self
+
+        class AndroidLocationListener(PythonJavaClass):
+            __javainterfaces__ = ["android/location/LocationListener"]
+            __javacontext__ = "app"
+
+            def __init__(self):
+                super().__init__()
+
+            @java_method("(Landroid/location/Location;)V")
+            def onLocationChanged(self, location):
+                if location is None:
+                    return
+                lat = float(location.getLatitude())
+                lon = float(location.getLongitude())
+                provider = str(location.getProvider()) if location.getProvider() else "unknown"
+                accuracy = None
+                try:
+                    accuracy = float(location.getAccuracy())
+                except Exception:
+                    accuracy = None
+
+                Clock.schedule_once(
+                    lambda _dt: app_ref.on_gps_location(
+                        lat=lat,
+                        lon=lon,
+                        accuracy=accuracy,
+                        provider=provider,
+                    ),
+                    0,
+                )
+
+            @java_method("(Ljava/lang/String;)V")
+            def onProviderDisabled(self, provider):
+                provider_name = str(provider)
+                Clock.schedule_once(
+                    lambda _dt: app_ref.on_gps_status(
+                        "provider", f"{provider_name} disabled"
+                    ),
+                    0,
+                )
+
+            @java_method("(Ljava/lang/String;)V")
+            def onProviderEnabled(self, provider):
+                provider_name = str(provider)
+                Clock.schedule_once(
+                    lambda _dt: app_ref.on_gps_status(
+                        "provider", f"{provider_name} enabled"
+                    ),
+                    0,
+                )
+
+            @java_method("(Ljava/lang/String;ILandroid/os/Bundle;)V")
+            def onStatusChanged(self, provider, status, extras):
+                provider_name = str(provider)
+                Clock.schedule_once(
+                    lambda _dt: app_ref.on_gps_status(
+                        "status", f"{provider_name} status={status}"
+                    ),
+                    0,
+                )
+
+        # Keep strong reference to avoid GC while Java still calls into Python.
+        self._location_listener = AndroidLocationListener()
+
+    def _enabled_android_providers(self) -> list[str]:
+        LocationManager = autoclass("android.location.LocationManager")
+        providers: list[str] = []
+        for provider in (LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER):
+            try:
+                if self._location_manager.isProviderEnabled(provider):
+                    providers.append(provider)
+            except Exception as e:
+                print(f"Could not query provider '{provider}': {e}")
+        return providers
+
+    def _start_android_location_updates(self):
+        Looper = autoclass("android.os.Looper")
+        providers = self._enabled_android_providers()
+        if not providers:
+            raise RuntimeError("No enabled Android location providers (GPS/NETWORK)")
+
+        print(f"Starting Android location updates via providers: {providers}")
+        for provider in providers:
+            self._location_manager.requestLocationUpdates(
+                provider,
+                1000,
+                0.0,
+                self._location_listener,
+                Looper.getMainLooper(),
+            )
+
+        self._emit_android_last_known_location(providers)
+
+    def _emit_android_last_known_location(self, providers: list[str]):
+        for provider in providers:
+            try:
+                last = self._location_manager.getLastKnownLocation(provider)
+            except Exception as e:
+                print(f"Could not read last known location for provider '{provider}': {e}")
+                continue
+
+            if last is None:
+                continue
+
+            try:
+                lat = float(last.getLatitude())
+                lon = float(last.getLongitude())
+            except Exception as e:
+                print(f"Invalid last known location from provider '{provider}': {e}")
+                continue
+
+            accuracy = None
+            try:
+                accuracy = float(last.getAccuracy())
+            except Exception:
+                accuracy = None
+
+            print(
+                "Using Android last known location from provider "
+                f"'{provider}': lat={lat:.6f}, lon={lon:.6f}, accuracy={accuracy}"
+            )
+            self.on_gps_location(lat=lat, lon=lon, accuracy=accuracy, provider=provider)
+            return
 
     def _gps_timeout_fallback(self, _dt):
         # If no fix arrives in time, use last successful GPS or default.
@@ -473,8 +627,9 @@ class WeatherApp(App):
 
     def on_stop(self):
         try:
-            if kivy_platform in ("android", "ios"):
-                gps.stop()
+            if kivy_platform == "android" and self._location_manager and self._location_listener:
+                self._location_manager.removeUpdates(self._location_listener)
+                print("Stopped Android location updates.")
         except Exception:
             pass
 
