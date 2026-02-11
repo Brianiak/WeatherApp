@@ -192,6 +192,17 @@ class TestFetchJson(unittest.TestCase):
             call_kwargs = mock_get.call_args[1]
             self.assertEqual(call_kwargs.get("timeout"), 5)
 
+    def test_fetch_json_payload_cod_error_raises_api_request_error(self):
+        """Test payload-level API error handling via non-200 cod values."""
+        fake = Mock()
+        fake.status_code = 200
+        fake.ok = True
+        fake.json.return_value = {"cod": "404", "message": "city not found"}
+
+        with patch("services.weather_service.requests.get", return_value=fake):
+            with self.assertRaises(weather_service.APIRequestError):
+                weather_service.fetch_json("http://example.com/api")
+
 
 class TestLoadDotenv(unittest.TestCase):
     """Tests for load_dotenv function"""
@@ -249,6 +260,82 @@ class TestLoadDotenv(unittest.TestCase):
             
             with self.assertRaises(weather_service.EnvNotFoundError):
                 weather_service.load_dotenv("/nonexistent/.env")
+
+
+class TestInternalHelpers(unittest.TestCase):
+    """Tests for internal helper functions that control dotenv lookup behavior."""
+
+    def test_default_env_paths_without_android_hints(self):
+        """Test default path discovery when no Android env hints are present."""
+        with patch("services.weather_service.os.getenv", return_value=None):
+            paths = weather_service._default_env_paths()
+
+        self.assertGreaterEqual(len(paths), 3)
+        self.assertEqual(len(paths), len({str(path) for path in paths}))
+
+    def test_default_env_paths_with_android_hints_are_deduplicated(self):
+        """Test Android-derived paths are added once even when hints overlap."""
+        env_values = {"ANDROID_ARGUMENT": "/tmp/p4a", "ANDROID_PRIVATE": "/tmp/p4a"}
+        with patch(
+            "services.weather_service.os.getenv",
+            side_effect=lambda key: env_values.get(key),
+        ):
+            paths = weather_service._default_env_paths()
+
+        as_strings = [str(path) for path in paths]
+        self.assertEqual(as_strings.count(str(Path("/tmp/p4a/.env"))), 1)
+        self.assertEqual(as_strings.count(str(Path("/tmp/p4a/app/.env"))), 1)
+
+    def test_load_dotenv_from_android_assets_without_pyjnius_returns_none(self):
+        """Test Android asset loader returns None when pyjnius is unavailable."""
+        real_import = __import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "jnius":
+                raise ImportError("pyjnius not installed")
+            return real_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=fake_import):
+            result = weather_service._load_dotenv_from_android_assets()
+
+        self.assertIsNone(result)
+
+    def test_load_dotenv_falls_back_to_android_assets(self):
+        """Test load_dotenv falls back to Android assets when files are absent."""
+        asset_env = {"URL": "http://fallback.local/api", "API_KEY": "fallback-key"}
+        with patch(
+            "services.weather_service._default_env_paths",
+            return_value=[Path("/does/not/exist/.env")],
+        ):
+            with patch(
+                "services.weather_service._load_dotenv_from_android_assets",
+                return_value=asset_env,
+            ):
+                with patch.dict(os.environ, {}, clear=True):
+                    result = weather_service.load_dotenv()
+                    self.assertEqual(os.environ["URL"], "http://fallback.local/api")
+                    self.assertEqual(os.environ["API_KEY"], "fallback-key")
+
+        self.assertEqual(result, asset_env)
+
+
+class TestConfigResolution(unittest.TestCase):
+    """Tests for config resolution sequence."""
+
+    def test_get_config_uses_values_loaded_from_dotenv(self):
+        """Test _get_config reads URL/API_KEY after load_dotenv populates env."""
+
+        def fake_load_dotenv():
+            os.environ["URL"] = "http://example.com/api"
+            os.environ["API_KEY"] = "dotenv-key"
+            return {"URL": os.environ["URL"], "API_KEY": os.environ["API_KEY"]}
+
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("services.weather_service.load_dotenv", side_effect=fake_load_dotenv):
+                url, api_key = weather_service._get_config()
+
+        self.assertEqual(url, "http://example.com/api")
+        self.assertEqual(api_key, "dotenv-key")
 
 
 class TestGetWeatherWithCoordinates(unittest.TestCase):
