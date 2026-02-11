@@ -311,7 +311,6 @@ class TestErrorHandling(unittest.TestCase):
         with patch("services.weather_service.load_dotenv", side_effect=weather_service.EnvNotFoundError()):
             with patch("services.weather_service._get_config.__module__", "services.weather_service"):
                 # Also block config.py fallback import
-                import importlib
                 import services.config
                 orig_url = services.config.URL
                 orig_key = services.config.API_KEY
