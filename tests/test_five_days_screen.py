@@ -429,4 +429,3 @@ if __name__ == "__main__":
     print("\nHTML Coverage Report generated in: htmlcov/index.html")
     cov.html_report(directory="htmlcov")
 
-

@@ -23,4 +23,3 @@ coverage==7.3.2
 # Kivy Issues? Try:
 #py -3.10 -m pip install -r requirements.txt
 
-
