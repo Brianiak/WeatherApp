@@ -56,8 +56,7 @@
         text: "5 Tage"
         group: "forecast"
         on_release: app.navigate("5days")
-
-
+    
 <WeatherCard@BoxLayout>:
     orientation: "vertical"
     padding: dp(22)
@@ -86,6 +85,60 @@
         Rectangle:
             pos: self.pos
             size: self.size
+
+
+<HourForecast@BoxLayout>:
+    orientation: "vertical"
+    size_hint: None, None
+    width: dp(100)
+    height: dp(140)
+    padding: (dp(8), dp(6))
+    spacing: dp(6)
+    
+    time_text: ""
+    icon_source: "icons/01d.png"
+    temp_text: "--°"
+    desc_text: ""
+    
+    Label:
+        text: root.time_text
+        size_hint_y: None
+        height: dp(30)
+        font_size: sp(15)
+        bold: True
+        halign: "center"
+        valign: "middle"
+        text_size: (dp(96), dp(30))
+        color: get_color_from_hex("#1E1E1E")
+    
+    Image:
+        source: root.icon_source
+        size_hint: None, None
+        size: (dp(50), dp(50))
+        pos_hint: {"center_x": 0.5}
+        allow_stretch: True
+        keep_ratio: True
+    
+    Label:
+        text: root.temp_text
+        font_size: sp(20)
+        bold: True
+        size_hint_y: None
+        height: dp(28)
+        halign: "center"
+        valign: "middle"
+        text_size: (dp(96), dp(28))
+        color: get_color_from_hex("#1E1E1E")
+    
+    Label:
+        text: root.desc_text
+        font_size: sp(12)
+        size_hint_y: None
+        height: dp(16)
+        halign: "center"
+        valign: "middle"
+        text_size: (dp(80), dp(16))
+        color: get_color_from_hex("#6B6B6B")
 
 
 <ForecastRow>:
@@ -198,14 +251,16 @@
                             bold: True
 
                         Image:
-                            source: "icons/weather_clouds.png"
+                            source: root.weather_icon
                             size_hint: None, None
                             size: dp(110), dp(110)
                             pos_hint: {"center_x": 0.5}
+                            allow_stretch: True
+                            keep_ratio: True
 
                         CenteredLabel:
                             text: root.temp_text
-                            font_size: sp(52)
+                            font_size: sp(48)
                             bold: True
 
                         CenteredLabel:
@@ -213,63 +268,39 @@
                             font_size: sp(16)
                             color: get_color_from_hex("#6B6B6B")
 
-                GridLayout:
-                    cols: 2
+                BoxLayout:
+                    orientation: "vertical"
                     size_hint_y: None
-                    height: dp(52)
-                    spacing: dp(14)
+                    height: dp(170)
+                    padding: dp(12)
 
-                    BoxLayout:
-                        orientation: "horizontal"
-                        spacing: dp(8)
+                    canvas.before:
+                        Color:
+                            rgba: get_color_from_hex("#FFFFFF")
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [dp(12), ]
+                        # subtle gray border instead of the blue frame used in mockups
+                        Color:
+                            rgba: get_color_from_hex("#DCE6EE")
+                        Line:
+                            rounded_rectangle: (self.x, self.y, self.width, self.height, dp(12))
+                            width: 1
 
-                        Image:
-                            source: "icons/humidity.png"
-                            size_hint: None, None
-                            size: dp(26), dp(26)
-
-                        BoxLayout:
-                            orientation: "vertical"
-                            spacing: dp(2)
-
-                            Label:
-                                text: root.humidity_text
-                                halign: "left"
-                                valign: "middle"
-                                text_size: self.size
-
-                            Label:
-                                text: "Humidity"
-                                color: get_color_from_hex("#6B6B6B")
-                                halign: "left"
-                                valign: "middle"
-                                text_size: self.size
-
-                    BoxLayout:
-                        orientation: "horizontal"
-                        spacing: dp(8)
-
-                        Image:
-                            source: "icons/wind.png"
-                            size_hint: None, None
-                            size: dp(26), dp(26)
+                    ScrollView:
+                        id: hourly_scroll
+                        do_scroll_y: False
+                        bar_width: dp(6)
+                        scroll_type: ["bars", "content"]
 
                         BoxLayout:
-                            orientation: "vertical"
-                            spacing: dp(2)
-
-                            Label:
-                                text: root.wind_text
-                                halign: "left"
-                                valign: "middle"
-                                text_size: self.size
-
-                            Label:
-                                text: "Wind"
-                                color: get_color_from_hex("#6B6B6B")
-                                halign: "left"
-                                valign: "middle"
-                                text_size: self.size
+                            id: hourly_box
+                            orientation: "horizontal"
+                            size_hint_x: None
+                            height: dp(140)
+                            width: self.minimum_width
+                            spacing: dp(10)
 
 
 <TomorrowScreen>:
@@ -298,7 +329,7 @@
                         spacing: dp(10)
                         size_hint: None, None
                         width: dp(260)
-                        height: dp(280)
+                        height: dp(320)
 
                         Image:
                             source: "icons/location.png"
@@ -312,33 +343,55 @@
                             bold: True
 
                         Image:
-                            source: "icons/weather_clouds.png"
+                            source: root.weather_icon
                             size_hint: None, None
                             size: dp(110), dp(110)
                             pos_hint: {"center_x": 0.5}
+                            allow_stretch: True
+                            keep_ratio: True
 
-                CenteredLabel:
-                    text: root.minmax_text
-                    font_size: sp(18)
-                    bold: True
+                        CenteredLabel:
+                            text: root.minmax_text
+                            font_size: sp(48)
+                            bold: True
+
+                        CenteredLabel:
+                            text: root.condition_text
+                            font_size: sp(16)
+                            color: get_color_from_hex("#6B6B6B")
+
+                BoxLayout:
+                    orientation: "vertical"
                     size_hint_y: None
-                    height: dp(30)
+                    height: dp(170)
+                    padding: dp(12)
 
-                CenteredLabel:
-                    text: root.condition_text
-                    font_size: sp(20)
-                    color: get_color_from_hex("#6B6B6B")
-                    size_hint_y: None
-                    height: dp(30)
+                    canvas.before:
+                        Color:
+                            rgba: get_color_from_hex("#FFFFFF")
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [dp(12), ]
+                        Color:
+                            rgba: get_color_from_hex("#DCE6EE")
+                        Line:
+                            rounded_rectangle: (self.x, self.y, self.width, self.height, dp(12))
+                            width: 1
 
-                Widget:
+                    ScrollView:
+                        id: hourly_scroll
+                        do_scroll_y: False
+                        bar_width: dp(6)
+                        scroll_type: ["bars", "content"]
 
-                CenteredLabel:
-                    text: root.dayparts_text
-                    font_size: sp(18)
-                    bold: True
-                    size_hint_y: None
-                    height: dp(34)
+                        BoxLayout:
+                            id: hourly_box
+                            orientation: "horizontal"
+                            size_hint_x: None
+                            height: dp(140)
+                            width: self.minimum_width
+                            spacing: dp(10)
 
 
 <FiveDaysScreen>:

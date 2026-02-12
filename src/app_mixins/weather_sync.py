@@ -191,14 +191,59 @@ class WeatherSyncMixin:
 
             condition = current_forecast.get("weather", [{}])[0].get("main", "Unknown")
             today_screen.condition_text = condition
+            
+            # Update current weather icon
+            icon_code = current_forecast.get("weather", [{}])[0].get("icon", "01d")
+            today_screen.weather_icon = f"icons/{icon_code}.png"
 
-            humidity = current_forecast.get("main", {}).get("humidity")
-            if humidity is not None:
-                today_screen.humidity_text = f"{humidity}%"
+            # The detailed hourly forecast (3-hour entries) is passed to the
+            # Today screen so it can populate the horizontal hourly scroller.
+            try:
+                if isinstance(weather_data, dict) and "list" in weather_data:
+                    today_screen.set_hourly_data(weather_data.get("list", []))
+            except Exception as e:
+                print(f"Error setting hourly data on TodayScreen: {e}")
 
-            wind_speed = current_forecast.get("wind", {}).get("speed")
-            if wind_speed is not None:
-                today_screen.wind_text = f"{wind_speed} m/s"
+            # Update Tomorrow Screen
+            try:
+                tomorrow_screen = self.root.ids.sm.get_screen("tomorrow")
+                
+                # Get current date from first entry
+                current_date_str = current_forecast.get("dt_txt", "").split()[0]
+                
+                # Find entries for tomorrow (next day)
+                tomorrow_entries = []
+                if current_date_str:
+                    from datetime import datetime, timedelta
+                    current_date = datetime.strptime(current_date_str, "%Y-%m-%d").date()
+                    tomorrow_date = (current_date + timedelta(days=1)).strftime("%Y-%m-%d")
+                    
+                    for entry in weather_data.get("list", []):
+                        entry_date_str = entry.get("dt_txt", "").split()[0]
+                        if entry_date_str == tomorrow_date:
+                            tomorrow_entries.append(entry)
+                
+                # Calculate min and max temp for tomorrow
+                if tomorrow_entries:
+                    temps = [e.get("main", {}).get("temp") for e in tomorrow_entries if e.get("main", {}).get("temp") is not None]
+                    if temps:
+                        min_temp = round(min(temps) - 273.15)
+                        max_temp = round(max(temps) - 273.15)
+                        tomorrow_screen.minmax_text = f"{min_temp}° / {max_temp}°"
+                    
+                    # Get weather icon and condition from first tomorrow entry
+                    first_tomorrow = tomorrow_entries[0]
+                    tomorrow_icon = first_tomorrow.get("weather", [{}])[0].get("icon", "01d")
+                    tomorrow_condition = first_tomorrow.get("weather", [{}])[0].get("main", "Unknown")
+                    
+                    tomorrow_screen.weather_icon = f"icons/{tomorrow_icon}.png"
+                    tomorrow_screen.condition_text = tomorrow_condition
+                    
+                    # Set hourly data for tomorrow
+                    tomorrow_screen.set_hourly_data(tomorrow_entries)
+                
+            except Exception as e:
+                print(f"Error updating TomorrowScreen: {e}")
 
             print(f"Weather display updated: {temp_celsius}\u00b0C, {condition}")
         except Exception as e:
