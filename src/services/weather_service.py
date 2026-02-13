@@ -8,6 +8,7 @@ The `.env` file is expected to contain `URL` and `API_KEY` variables.
 """
 
 import os
+import json
 from pathlib import Path
 import requests
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
@@ -282,7 +283,42 @@ def build_request_url(url: str, api_key: str, lat: str | float | None = None, lo
     new_parsed = parsed._replace(query=new_query)
     return urlunparse(new_parsed)
 
-# TODO: Consider creating fallback logic f.ex. caching the last successful response to use when network errors occur.
+def _get_weather_cache_path() -> Path:
+    """Return the path to the cached weather JSON file."""
+    # Get the src directory (parent of services directory)
+    src_dir = Path(__file__).resolve().parents[1]
+    cache_file = src_dir / "json" / "last_weather.json"
+    return cache_file
+
+
+def _save_weather_cache(data: dict) -> None:
+    """Save weather data to cache file."""
+    try:
+        cache_file = _get_weather_cache_path()
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        with cache_file.open('w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        print(f"[cache] Saved weather data to {cache_file}")
+    except Exception as e:
+        print(f"[cache] Failed to save weather cache: {e}")
+
+
+def _load_weather_cache() -> dict | None:
+    """Load weather data from cache file."""
+    try:
+        cache_file = _get_weather_cache_path()
+        if not cache_file.exists():
+            print(f"[cache] Cache file not found: {cache_file}")
+            return None
+        with cache_file.open('r', encoding='utf-8') as f:
+            data = json.load(f)
+        print(f"[cache] Loaded weather data from cache: {cache_file}")
+        return data
+    except Exception as e:
+        print(f"[cache] Failed to load weather cache: {e}")
+        return None
+
+
 def fetch_json(request_url: str, timeout: int = 10) -> dict:
     """Perform HTTP GET against `request_url` and return parsed JSON.
 
@@ -323,6 +359,8 @@ def fetch_json(request_url: str, timeout: int = 10) -> dict:
             message = payload.get("message", "unknown API error")
             raise APIRequestError(f"API payload error cod={cod}: {message}")
 
+    # Save successful response to cache
+    _save_weather_cache(payload)
     return payload
 
 def get_weather(lat: str | float | None = None, lon: str | float | None = None) -> dict:
@@ -331,10 +369,26 @@ def get_weather(lat: str | float | None = None, lon: str | float | None = None) 
     Optional `lat` and `lon` may be provided (floats or strings) and will
     be inserted into the request URL query parameters. If omitted, the
     coordinates present in the configured base URL (or none) will be used.
+
+    If the API call fails, attempts to return cached weather data from the
+    last successful request. Raises APIRequestError if both the API call
+    and cache retrieval fail.
     """
     url, api_key = _get_config()
     request_url = build_request_url(url, api_key, lat=lat, lon=lon)
-    return fetch_json(request_url)
+    
+    try:
+        return fetch_json(request_url)
+    except Exception as e:
+        print(f"[get_weather] API call failed ({type(e).__name__}): {e}")
+        print("[get_weather] Attempting to use cached weather data...")
+        
+        cached_data = _load_weather_cache()
+        if cached_data is not None:
+            return cached_data
+        
+        # Re-raise the original exception if cache is not available
+        raise
 
 
 __all__ = ["get_weather", "build_request_url", "fetch_json"]
