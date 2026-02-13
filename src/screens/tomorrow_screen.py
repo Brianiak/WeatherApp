@@ -6,6 +6,7 @@ from base_screen import BaseWeatherScreen
 
 class TomorrowScreen(BaseWeatherScreen):
     location_text = StringProperty("Standort wird ermittelt...")
+    location_icon_source = StringProperty("icons/location.png")
     condition_text = StringProperty("Clouds")
     minmax_text = StringProperty("Min. Temp / Max. Temp")
     dayparts_text = StringProperty("Morgen / Mittag / Abend / Nacht")
