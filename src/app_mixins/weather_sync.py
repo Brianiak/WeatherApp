@@ -6,10 +6,25 @@ import services.weather_service as weather_service
 
 
 class WeatherSyncMixin:
+    """Mixin providing weather data fetching and display synchronization.
+    
+    Handles fetching weather data from the OpenWeatherMap API, managing
+    location coordinates, updating all weather UI screens with current
+    and forecast data, and handling API errors with fallback to cached data.
+    """
+    
     # Flag to track if current weather data was loaded from cache
     _weather_from_cache = False
     
     def _should_refresh_weather(self) -> bool:
+        """Check if enough time has elapsed to refresh weather data.
+        
+        Uses the WEATHER_REFRESH_INTERVAL class attribute to throttle
+        API calls and avoid excessive requests to the weather service.
+        
+        Returns:
+            bool: True if refresh interval elapsed, False otherwise
+        """
         now = time.monotonic()
         if now - self._last_weather_refresh_ts < self.WEATHER_REFRESH_INTERVAL:
             return False
@@ -23,6 +38,19 @@ class WeatherSyncMixin:
         force_refresh: bool = False,
         track_as_gps: bool = False,
     ):
+        """Apply location coordinates and fetch weather data.
+        
+        Stores the provided coordinates, optionally saves them to cache,
+        and fetches weather data from the API. Updates all weather UI
+        screens with the fetched data. Falls back to cached data if the
+        API call fails.
+        
+        Args:
+            lat (float): Latitude coordinate (-90 to 90)
+            lon (float): Longitude coordinate (-180 to 180)
+            force_refresh (bool): Force API refresh even if interval throttle active
+            track_as_gps (bool): Mark as live GPS fix and save to location cache
+        """
         source = "live GPS" if track_as_gps else "fallback/cached location"
         print(
             f"Applying {source}: lat={lat:.6f}, lon={lon:.6f}, "
@@ -68,6 +96,17 @@ class WeatherSyncMixin:
         requested_lon: float,
         weather_data: dict,
     ):
+        """Log the difference between requested and API-returned coordinates.
+        
+        Extracts the city location from the weather API response and compares
+        it with the requested coordinates to verify location accuracy. Alerts
+        if the coordinates differ significantly (>1 degree).
+        
+        Args:
+            requested_lat (float): The latitude that was requested
+            requested_lon (float): The longitude that was requested
+            weather_data (dict): Weather API response with city coordinate info
+        """
         if not isinstance(weather_data, dict):
             return
 
@@ -112,6 +151,19 @@ class WeatherSyncMixin:
             )
 
     def _location_label_from_error(self, error: Exception, track_as_gps: bool) -> str:
+        """Generate a user-friendly location label based on error type.
+        
+        Maps specific exception types to appropriate German error messages
+        for display in the UI. Returns different messages based on the
+        error type and whether GPS tracking was active.
+        
+        Args:
+            error (Exception): The exception that was raised
+            track_as_gps (bool): Whether this was a GPS tracking attempt
+            
+        Returns:
+            str: German error message for display in the UI
+        """
         if isinstance(error, weather_service.EnvNotFoundError):
             return "Standortname nicht verfuegbar (.env fehlt)"
         if isinstance(error, weather_service.MissingAPIConfigError):
@@ -133,6 +185,18 @@ class WeatherSyncMixin:
         weather_data: dict,
         track_as_gps: bool = False,
     ) -> str | None:
+        """Extract location label from weather data and update UI screens.
+        
+        Parses the city name and country from the weather API response
+        and updates location text displayed on Today and Tomorrow screens.
+        
+        Args:
+            weather_data (dict): Weather API response containing city info
+            track_as_gps (bool): Whether this location came from live GPS
+            
+        Returns:
+            str | None: The formatted location label, or None on extraction failure
+        """
         label = self._extract_location_label(weather_data)
         if not label:
             fallback_label = self._format_location_label(
@@ -147,6 +211,18 @@ class WeatherSyncMixin:
         return display_label
 
     def _extract_location_label(self, weather_data: dict) -> str | None:
+        """Extract city and country name from weather API response.
+        
+        Parses the 'city' object from the API response to get location
+        information. Returns formatted string "City, Country" or just "City"
+        if country is unavailable.
+        
+        Args:
+            weather_data (dict): Weather API response containing city info
+            
+        Returns:
+            str | None: Location label like "Berlin, DE" or None if not found
+        """
         city_info = weather_data.get("city", {}) if isinstance(weather_data, dict) else {}
         if not isinstance(city_info, dict):
             city_info = {}
@@ -167,6 +243,11 @@ class WeatherSyncMixin:
         return None
 
     def _refresh_forecast_screen(self):
+        """Trigger data refresh on the 5-day forecast screen.
+        
+        Schedules an asynchronous reload of forecast data on the FiveDaysScreen
+        to display the latest weather forecast for the current coordinates.
+        """
         if not self.root or "sm" not in self.root.ids:
             return
 
@@ -178,8 +259,19 @@ class WeatherSyncMixin:
         if hasattr(screen, "_load_forecast_data"):
             Clock.schedule_once(lambda _dt: screen._load_forecast_data(), 0)
 
-    def _update_weather_display(self, weather_data):
-        try:
+    def _update_weather_display(self, weather_data):        """Update all weather screens with current and forecast data.
+        
+        Parses the weather API response and updates:
+        - Today screen: current temperature, weather condition, hourly forecast
+        - Tomorrow screen: min/max temperature, hourly forecast, weather icon
+        - Five days screen: forecast data refresh
+        
+        Uses cache indicator icons and sets location labels. Updates are
+        applied asynchronously to the UI screens.
+        
+        Args:
+            weather_data (dict): Weather API response with forecast entries
+        """        try:
             if not weather_data or "list" not in weather_data or not weather_data["list"]:
                 return
             if not self.root or "sm" not in self.root.ids:

@@ -15,7 +15,21 @@ except Exception:  # pragma: no cover - desktop/test environments
 
 
 class AndroidLocationMixin:
+    """Mixin providing Android GPS location tracking and permission handling.
+    
+    Manages Android location permissions, initializes GPS tracking via the
+    Android LocationManager service, handles location updates with provider
+    fallback, and implements timeout fallback to cached locations when GPS
+    acquisition fails or is not available.
+    """
+    
     def _start_android_location_flow(self):
+        """Start the Android GPS location acquisition flow.
+        
+        Requests necessary location permissions (coarse and fine location).
+        If permissions are already granted, immediately starts GPS tracking.
+        If permissions are denied, falls back to cached location.
+        """
         try:
             from android.permissions import Permission, check_permission, request_permissions
 
@@ -30,6 +44,16 @@ class AndroidLocationMixin:
             self._use_last_known_location_or_default("android permission flow failed")
 
     def _on_android_permissions_result(self, permissions, grants):
+        """Handle the result of Android permission requests.
+        
+        Called when the user responds to permission requests. If any location
+        permission is granted, starts GPS. If all permissions are denied,
+        falls back to cached or default location.
+        
+        Args:
+            permissions: List of requested permission identifiers
+            grants: List of booleans indicating if each permission was granted
+        """
         grants = [bool(grant) for grant in grants]
         if any(grants):
             if not all(grants):
@@ -44,6 +68,14 @@ class AndroidLocationMixin:
         self._use_last_known_location_or_default("location permission denied")
 
     def _start_gps(self):
+        """Start GPS location updates on Android.
+        
+        Initializes the Android LocationManager and begins requesting location
+        updates from available providers (GPS and/or Network). Sets up a timeout
+        fallback (GPS_TIMEOUT seconds) to use cached location if GPS acquisition fails.
+        
+        On non-Android platforms, falls back to cached or default location.
+        """
         if kivy_platform != "android":
             print(f"GPS via pyjnius is Android-only (platform={kivy_platform}).")
             self._use_last_known_location_or_default("GPS not available on this platform")
@@ -66,6 +98,12 @@ class AndroidLocationMixin:
             self._use_last_known_location_or_default("failed to start GPS")
 
     def _init_android_location_manager(self):
+        """Initialize Android LocationManager and custom LocationListener.
+        
+        Sets up the Android system LocationManager service and creates a custom
+        LocationListener that bridges Android location callbacks to Kivy Clock
+        for proper UI thread scheduling.
+        """
         PythonActivity = autoclass("org.kivy.android.PythonActivity")
         Context = autoclass("android.content.Context")
         activity = PythonActivity.mActivity
@@ -141,6 +179,15 @@ class AndroidLocationMixin:
         self._location_listener = AndroidLocationListener()
 
     def _enabled_android_providers(self) -> list[str]:
+        """Get list of currently enabled Android location providers.
+        
+        Queries the Android LocationManager for available location providers
+        (GPS_PROVIDER and NETWORK_PROVIDER) and returns only those that are
+        currently enabled.
+        
+        Returns:
+            list[str]: List of enabled provider names (may be empty)
+        """
         LocationManager = autoclass("android.location.LocationManager")
         providers: list[str] = []
         for provider in (LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER):
@@ -152,6 +199,15 @@ class AndroidLocationMixin:
         return providers
 
     def _start_android_location_updates(self):
+        """Start requesting location updates from Android providers.
+        
+        Registers the custom LocationListener with the Android LocationManager
+        for all enabled providers. Also emits the last known location for each
+        provider to immediately provide a location fix if available.
+        
+        Raises:
+            RuntimeError: If no location providers are enabled
+        """
         Looper = autoclass("android.os.Looper")
         providers = self._enabled_android_providers()
         if not providers:
@@ -170,6 +226,15 @@ class AndroidLocationMixin:
         self._emit_android_last_known_location(providers)
 
     def _emit_android_last_known_location(self, providers: list[str]):
+        """Emit the last known location for each provider.
+        
+        Retrieves and emits the last known location cached by Android's
+        LocationManager for each enabled provider. This provides an immediate
+        location fix without waiting for fresh GPS fixes.
+        
+        Args:
+            providers (list[str]): List of location provider names to query
+        """
         for provider in providers:
             try:
                 last = self._location_manager.getLastKnownLocation(provider)
@@ -200,6 +265,11 @@ class AndroidLocationMixin:
             return
 
     def _gps_timeout_fallback(self, _dt):
+        """Fallback handler called when GPS acquisition times out.
+        
+        Called when GPS_TIMEOUT seconds elapse without getting a GPS fix.
+        Falls back to the last cached location or default coordinates.
+        """
         self._gps_timeout_event = None
         if self.current_lat is None or self.current_lon is None:
             print(
@@ -209,6 +279,15 @@ class AndroidLocationMixin:
             self._use_last_known_location_or_default("GPS timeout")
 
     def on_gps_status(self, stype, status):
+        """Handle GPS status change events from Android LocationListener.
+        
+        Called when GPS provider status changes (enabled, disabled, etc.).
+        Falls back to cached location if status indicates GPS is degraded.
+        
+        Args:
+            stype (str): Type of status change ('provider' or 'status')
+            status (str): Description of the status change
+        """
         print(f"GPS status: type={stype}, status={status}")
         status_text = str(status).lower()
         degraded = ("disabled", "out of service", "unavailable", "denied")
@@ -216,6 +295,15 @@ class AndroidLocationMixin:
             self._use_last_known_location_or_default(f"GPS status: {status}")
 
     def on_gps_location(self, **kwargs):
+        """Handle new GPS location update from Android LocationListener.
+        
+        Validates the received coordinates, cancels any pending timeout,
+        and applies the location for weather data fetching. Calls _apply_location()
+        with force_refresh=True on first GPS fix.
+        
+        Args:
+            **kwargs: Must contain 'lat' and 'lon' as floats, optional 'accuracy'
+        """
         if self._gps_timeout_event:
             self._gps_timeout_event.cancel()
             self._gps_timeout_event = None
@@ -258,6 +346,11 @@ class AndroidLocationMixin:
         )
 
     def on_stop(self):
+        """Cleanup GPS resources on application stop.
+        
+        Unregisters the LocationListener from the Android LocationManager
+        to stop receiving GPS updates. Called automatically when the app exits.
+        """
         try:
             if (
                 kivy_platform == "android"
