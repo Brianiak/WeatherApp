@@ -23,6 +23,13 @@ for resource_dir in (PROJECT_ROOT, KV_PATH.parent):
 
 
 class WeatherApp(AndroidLocationMixin, LocationCacheMixin, WeatherSyncMixin, App):
+    """Main application class combining GPS location and weather data features.
+    
+    Integrates Android GPS location handling, location caching, and weather
+    synchronization to provide a comprehensive weather application with the
+    OpenWeatherMap API backend.
+    """
+    
     kv_file = str(KV_PATH)
     _gps_timeout_event = None
     GPS_TIMEOUT = 45  # seconds
@@ -39,6 +46,12 @@ class WeatherApp(AndroidLocationMixin, LocationCacheMixin, WeatherSyncMixin, App
     _location_listener = None
 
     def on_start(self):
+        """Initialize the application on startup.
+        
+        Loads the last cached location and initiates the location flow.
+        On Android devices, starts the GPS permission request and location tracking.
+        On other platforms, uses fallback coordinates (London).
+        """
         self._load_last_known_location()
 
         if kivy_platform == "android":
@@ -54,6 +67,14 @@ class WeatherApp(AndroidLocationMixin, LocationCacheMixin, WeatherSyncMixin, App
         )
 
     def navigate(self, key: str):
+        """Navigate to a different screen in the application.
+        
+        Args:
+            key (str): Screen identifier. Valid values are:
+                - 'today': Today's weather screen
+                - 'tomorrow': Tomorrow's weather screen  
+                - '5days': 5-day forecast screen
+        """
         self.root.navigate(key)
 
 

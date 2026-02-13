@@ -5,6 +5,13 @@ from base_screen import BaseWeatherScreen
 
 
 class TomorrowScreen(BaseWeatherScreen):
+    """Display tomorrow's weather forecast with detailed hourly information.
+    
+    Shows tomorrow's weather conditions including min/max temperatures,
+    hourly forecast by time of day, and an hourly breakdown for the
+    entire day.
+    """
+    
     location_text = StringProperty("Standort wird ermittelt...")
     location_icon_source = StringProperty("icons/location.png")
     condition_text = StringProperty("Clouds")
@@ -14,7 +21,15 @@ class TomorrowScreen(BaseWeatherScreen):
     hourly_items = ListProperty([])
 
     def set_hourly_data(self, entries: list):
-        """Populate the hourly forecast for tomorrow."""
+        """Populate the hourly forecast for tomorrow.
+        
+        Extracts hourly weather data and creates HourForecast widgets
+        for each entry throughout tomorrow, displaying the full day's
+        hourly forecast.
+        
+        Args:
+            entries (list): List of API forecast entries for tomorrow
+        """
         try:
             self.hourly_items = entries or []
 
