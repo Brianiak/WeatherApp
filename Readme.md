@@ -18,6 +18,8 @@ Die App zeigt OpenWeatherMap-Daten in drei Ansichten:
   - Live GPS
   - Letzter erfolgreicher Standort aus Cache
   - Default-Koordinaten (London: `51.5074, -0.1278`)
+- Wetter-Cache in `src/json/last_weather.json` bei erfolgreichem API-Call
+- API-Fallback auf letzte gecachte Wetterdaten bei Netzwerk/API-Problemen
 - Robuste API-Fehlerbehandlung (`NetworkError`, `ServiceUnavailableError`, `APITokenExpiredError`, ...)
 
 ## Tech Stack
@@ -153,3 +155,5 @@ Relevante Einstellungen in `buildozer.spec`:
 - Auf Desktop gibt es keinen Android `LocationManager`; dann greift der Fallback-Flow.
 - Wetter-Refresh ist in `src/main.py` ueber `WEATHER_REFRESH_INTERVAL` gedrosselt.
 - Letzter erfolgreicher Standort wird als `last_location.json` im `user_data_dir` gecacht.
+- Letzte erfolgreiche Wetterantwort wird in `src/json/last_weather.json` gespeichert und bei Fehlern als Fallback genutzt.
+- Bei Cache-Fallback setzt `weather_service.get_weather()` das Flag `__cached__ = True`.
