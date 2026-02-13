@@ -9,7 +9,7 @@ import services.weather_service as weather_service
 from app_mixins.android_location import AndroidLocationMixin
 from app_mixins.location_cache import LocationCacheMixin
 from app_mixins.weather_sync import WeatherSyncMixin
-from five_days_screen import FiveDaysScreen  # noqa: F401
+from screens.five_days_screen import FiveDaysScreen  # noqa: F401
 from screens.today_screen import TodayScreen  # noqa: F401
 from screens.tomorrow_screen import TomorrowScreen  # noqa: F401
 from ui.forecast_row import ForecastRow  # noqa: F401
