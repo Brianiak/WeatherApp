@@ -81,3 +81,6 @@ ehthumbs.db
 # Docs/Notes etc
 Weatherly_Doku.docx
 Screenshot 2026-02-12 074431.png
+
+# Last weather data
+src/json/last_weather.json
