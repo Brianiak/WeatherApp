@@ -1,7 +1,12 @@
 # WeatherApp
 
 Kivy-basierte Wetter-App fuer Desktop und Android.
+Kivy-basierte Wetter-App fuer Desktop und Android.
 
+Die App zeigt OpenWeatherMap-Daten in drei Ansichten:
+- `Heute`
+- `Morgen`
+- `5 Tage`
 Die App zeigt OpenWeatherMap-Daten in drei Ansichten:
 - `Heute`
 - `Morgen`
@@ -25,12 +30,17 @@ Die App zeigt OpenWeatherMap-Daten in drei Ansichten:
 ## Tech Stack
 
 - Python 3.11
+- Python 3.11
 - Kivy (`kivy>=2.3.1`)
 - Requests (`requests==2.32.5`)
 - Pyjnius (`pyjnius==1.6.1`, nur non-Windows)
 - Tests: `unittest` + `pytest`
 - Lint: `ruff`
+- Pyjnius (`pyjnius==1.6.1`, nur non-Windows)
+- Tests: `unittest` + `pytest`
+- Lint: `ruff`
 
+## Projektstruktur
 ## Projektstruktur
 
 ```text
@@ -38,6 +48,7 @@ src/
   main.py
   weather.kv
   base_screen.py
+  .env
   .env
   app_mixins/
     android_location.py
@@ -47,12 +58,19 @@ src/
     today_screen.py
     tomorrow_screen.py
     five_days_screen.py
+    five_days_screen.py
   services/
     weather_service.py
     config.py
   ui/
     weather_root.py
     forecast_row.py
+  utils/
+    exceptions.py
+  icons/
+  json/
+    last_weather.json
+
   utils/
     exceptions.py
   icons/
@@ -69,6 +87,13 @@ tests/
   main_caching.yml
   protect-main.yml
 
+
+.github/workflows/
+  build-apk.yml
+  lint-test-branches.yml
+  main_caching.yml
+  protect-main.yml
+
 buildozer.spec
 requirements.txt
 pytest.ini
@@ -77,7 +102,11 @@ pytest.ini
 ## Konfiguration
 
 ### 1) Umgebungsvariablen (`URL`, `API_KEY`)
+## Konfiguration
 
+### 1) Umgebungsvariablen (`URL`, `API_KEY`)
+
+Beispiel fuer `.env`:
 Beispiel fuer `.env`:
 
 ```env
@@ -105,7 +134,28 @@ Empfehlung:
 - Keine echten Keys in `config.py` committen.
 - Key nur ueber `.env`/Secrets bereitstellen.
 - Bereits geleakte Keys im OpenWeatherMap-Account rotieren.
+### 2) Welche `.env` wird genutzt?
 
+Die App sucht die Konfiguration in dieser Reihenfolge:
+1. Bereits gesetzte Umgebungsvariablen (`URL`, `API_KEY`)
+2. `.env`-Dateien (mehrere Kandidaten, inkl. Repo-Root und Laufzeitpfade)
+3. Android-Assets (`.env`)
+4. Fallback aus `src/services/config.py`
+
+### 3) Wichtig fuer CI/Android Build
+
+Die GitHub-Workflows erwarten `src/.env` und kopieren sie beim Build nach `.env` im Repo-Root.
+
+## Sicherheitshinweis
+
+`src/services/config.py` enthaelt aktuell einen Fallback-API-Key.
+
+Empfehlung:
+- Keine echten Keys in `config.py` committen.
+- Key nur ueber `.env`/Secrets bereitstellen.
+- Bereits geleakte Keys im OpenWeatherMap-Account rotieren.
+
+## Lokales Setup (Windows PowerShell)
 ## Lokales Setup (Windows PowerShell)
 
 ```powershell
@@ -116,13 +166,16 @@ pip install -r requirements.txt
 ```
 
 ## App starten
+## App starten
 
 ```powershell
 python src/main.py
 ```
 
 Hinweis: Beim Start wird einmal die rohe Wetter-JSON auf der Konsole ausgegeben, danach startet die UI.
+Hinweis: Beim Start wird einmal die rohe Wetter-JSON auf der Konsole ausgegeben, danach startet die UI.
 
+## Tests und Lint
 ## Tests und Lint
 
 ```powershell
@@ -132,13 +185,18 @@ python -m ruff check .
 ```
 
 ## Android Build (Linux/WSL empfohlen)
+## Android Build (Linux/WSL empfohlen)
 
 ```bash
 buildozer -v android debug
 ```
 
 Relevante Einstellungen in `buildozer.spec`:
+Relevante Einstellungen in `buildozer.spec`:
 - Permissions: `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`, `WAKE_LOCK`
+- `android.minapi = 21`
+- `android.api = 33`
+- Architektur: `arm64-v8a`
 - `android.minapi = 21`
 - `android.api = 33`
 - Architektur: `arm64-v8a`
@@ -149,7 +207,12 @@ Relevante Einstellungen in `buildozer.spec`:
 - `lint-test-branches.yml`: Lint, Tests, Android-Testbuild fuer Branches/PRs
 - `build-apk.yml`: Lint, Tests, Android-Build auf `main` + manuell
 - `protect-main.yml`: blockt direkte Pushes auf `main` ohne PR-Bezug
+- `main_caching.yml`: Build-Job (manual trigger)
+- `lint-test-branches.yml`: Lint, Tests, Android-Testbuild fuer Branches/PRs
+- `build-apk.yml`: Lint, Tests, Android-Build auf `main` + manuell
+- `protect-main.yml`: blockt direkte Pushes auf `main` ohne PR-Bezug
 
+## Bekannte Laufzeit-Details
 ## Bekannte Laufzeit-Details
 
 - Auf Desktop gibt es keinen Android `LocationManager`; dann greift der Fallback-Flow.
