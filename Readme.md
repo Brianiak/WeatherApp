@@ -1,40 +1,42 @@
 # WeatherApp
 
-Kivy-based weather app for desktop and Android.
+Kivy-basierte Wetter-App fuer Desktop und Android.
 
-The app displays weather data from OpenWeatherMap in three views:
-- `Heute` (today)
-- `Morgen` (tomorrow)
-- `5 Tage` (5-day forecast)
-
-It supports live Android GPS, cached last-known location, and a default fallback location when GPS is unavailable.
+Die App zeigt OpenWeatherMap-Daten in drei Ansichten:
+- `Heute`
+- `Morgen`
+- `5 Tage`
 
 ## Features
 
-- Current weather display (temperature, condition, humidity, wind)
-- Tomorrow overview (condition, min/max, day parts)
-- 5-day forecast list with weather icons and day-part temperatures
-- Responsive card layout for desktop and mobile-like screens
-- Android location flow with runtime permissions
-- Location fallback chain: live GPS -> cached location -> default coordinates
-- Error handling for API/network/config problems
+- Aktuelles Wetter (Temperatur, Zustand, Ort)
+- Horizontale Stundenvorschau fuer `Heute`
+- Horizontale Stundenvorschau fuer `Morgen`
+- 5-Tage-Liste mit Min/Max und Tagesabschnitten (Morgen/Mittag/Abend/Nacht)
+- Android-GPS mit Runtime-Permissions
+- Standort-Fallback-Kette:
+  - Live GPS
+  - Letzter erfolgreicher Standort aus Cache
+  - Default-Koordinaten (London: `51.5074, -0.1278`)
+- Robuste API-Fehlerbehandlung (`NetworkError`, `ServiceUnavailableError`, `APITokenExpiredError`, ...)
 
 ## Tech Stack
 
-- Python
+- Python 3.11
 - Kivy (`kivy>=2.3.1`)
 - Requests (`requests==2.32.5`)
-- Pyjnius for Android bridge (`pyjnius==1.6.1`, non-Windows)
-- Ruff + Pytest/Unittest for quality checks
+- Pyjnius (`pyjnius==1.6.1`, nur non-Windows)
+- Tests: `unittest` + `pytest`
+- Lint: `ruff`
 
-## Project Structure
+## Projektstruktur
 
 ```text
 src/
   main.py
   weather.kv
   base_screen.py
-  five_days_screen.py
+  .env
   app_mixins/
     android_location.py
     location_cache.py
@@ -42,39 +44,67 @@ src/
   screens/
     today_screen.py
     tomorrow_screen.py
+    five_days_screen.py
   services/
     weather_service.py
     config.py
   ui/
     weather_root.py
     forecast_row.py
+  utils/
+    exceptions.py
+  icons/
+  json/
+    last_weather.json
+
 tests/
   test_weather_service.py
   test_five_days_screen.py
+
+.github/workflows/
+  build-apk.yml
+  lint-test-branches.yml
+  main_caching.yml
+  protect-main.yml
+
 buildozer.spec
 requirements.txt
 pytest.ini
 ```
 
-## Configuration
+## Konfiguration
 
-Create a `.env` file in the repository root:
+### 1) Umgebungsvariablen (`URL`, `API_KEY`)
+
+Beispiel fuer `.env`:
 
 ```env
 URL=https://api.openweathermap.org/data/2.5/forecast
 API_KEY=your_openweathermap_api_key
 ```
 
-Config resolution order in `src/services/weather_service.py`:
-1. Environment variables (`URL`, `API_KEY`)
-2. `.env` files (multiple candidate paths, including project root)
-3. `src/services/config.py` fallback
+### 2) Welche `.env` wird genutzt?
 
-Notes:
-- Keep real keys out of version control.
-- CI/APK workflows expect `src/.env` to exist and copy it to root during build.
+Die App sucht die Konfiguration in dieser Reihenfolge:
+1. Bereits gesetzte Umgebungsvariablen (`URL`, `API_KEY`)
+2. `.env`-Dateien (mehrere Kandidaten, inkl. Repo-Root und Laufzeitpfade)
+3. Android-Assets (`.env`)
+4. Fallback aus `src/services/config.py`
 
-## Local Setup
+### 3) Wichtig fuer CI/Android Build
+
+Die GitHub-Workflows erwarten `src/.env` und kopieren sie beim Build nach `.env` im Repo-Root.
+
+## Sicherheitshinweis
+
+`src/services/config.py` enthaelt aktuell einen Fallback-API-Key.
+
+Empfehlung:
+- Keine echten Keys in `config.py` committen.
+- Key nur ueber `.env`/Secrets bereitstellen.
+- Bereits geleakte Keys im OpenWeatherMap-Account rotieren.
+
+## Lokales Setup (Windows PowerShell)
 
 ```powershell
 py -3.11 -m venv .venv
@@ -83,59 +113,43 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## Run the App
-
-From repo root:
+## App starten
 
 ```powershell
 python src/main.py
 ```
 
-`src/main.py` prints one weather JSON response at startup and then launches the Kivy UI.
+Hinweis: Beim Start wird einmal die rohe Wetter-JSON auf der Konsole ausgegeben, danach startet die UI.
 
-## Tests and Lint
-
-Run unit tests (unittest):
+## Tests und Lint
 
 ```powershell
 python -m unittest discover -s tests
-```
-
-Run tests with pytest:
-
-```powershell
 python -m pytest -q -p no:cacheprovider
-```
-
-Run lint:
-
-```powershell
 python -m ruff check .
 ```
 
-## Android Build
-
-The repository includes `buildozer.spec` and GitHub Actions workflows for APK builds.
-
-Typical local build command (Linux/WSL environment):
+## Android Build (Linux/WSL empfohlen)
 
 ```bash
 buildozer -v android debug
 ```
 
-Important Android settings already present:
+Relevante Einstellungen in `buildozer.spec`:
 - Permissions: `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`, `WAKE_LOCK`
-- API levels: `android.minapi = 21`, `android.api = 33`
-- Arch: `arm64-v8a`
+- `android.minapi = 21`
+- `android.api = 33`
+- Architektur: `arm64-v8a`
 
 ## CI Workflows
 
-- `.github/workflows/main_caching.yml`: lint + tests + Android build for `main`
-- `.github/workflows/lint-test-branches.yml`: branch/PR lint + tests + Android test build
-- `.github/workflows/build-apk.yml`: manual APK build (`workflow_dispatch`)
+- `main_caching.yml`: Build-Job (manual trigger)
+- `lint-test-branches.yml`: Lint, Tests, Android-Testbuild fuer Branches/PRs
+- `build-apk.yml`: Lint, Tests, Android-Build auf `main` + manuell
+- `protect-main.yml`: blockt direkte Pushes auf `main` ohne PR-Bezug
 
-## Known Behavior and Fallbacks
+## Bekannte Laufzeit-Details
 
-- Desktop platforms without Android `LocationManager` use cached/default coordinates.
-- If weather refresh fails, the app keeps working with fallback screen data where implemented.
-- Weather refresh is throttled via `WEATHER_REFRESH_INTERVAL` in `src/main.py`.
+- Auf Desktop gibt es keinen Android `LocationManager`; dann greift der Fallback-Flow.
+- Wetter-Refresh ist in `src/main.py` ueber `WEATHER_REFRESH_INTERVAL` gedrosselt.
+- Letzter erfolgreicher Standort wird als `last_location.json` im `user_data_dir` gecacht.
