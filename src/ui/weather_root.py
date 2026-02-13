@@ -1,4 +1,5 @@
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.screenmanager import SlideTransition
 
 
 class WeatherRoot(BoxLayout):
@@ -11,6 +12,23 @@ class WeatherRoot(BoxLayout):
         target = mapping.get(key)
         if not target:
             return
+
+        # determine transition direction based on current and target indices
+        try:
+            names = list(sm.screen_names)
+            current_index = names.index(sm.current) if sm.current in names else 0
+            target_index = names.index(target)
+            if target_index > current_index:
+                direction = "left"
+            elif target_index < current_index:
+                direction = "right"
+            else:
+                direction = None
+        except Exception:
+            direction = None
+
+        if direction:
+            sm.transition = SlideTransition(direction=direction, duration=0.5)
 
         sm.current = target
         self._sync_nav_for_current()
