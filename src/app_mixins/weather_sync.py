@@ -6,6 +6,9 @@ import services.weather_service as weather_service
 
 
 class WeatherSyncMixin:
+    # Flag to track if current weather data was loaded from cache
+    _weather_from_cache = False
+    
     def _should_refresh_weather(self) -> bool:
         now = time.monotonic()
         if now - self._last_weather_refresh_ts < self.WEATHER_REFRESH_INTERVAL:
@@ -39,6 +42,8 @@ class WeatherSyncMixin:
 
         try:
             data = weather_service.get_weather(lat=lat, lon=lon)
+            # Check if data came from cache
+            self._weather_from_cache = data.get("__cached__", False)
             self._log_location_roundtrip(lat, lon, data)
             #print(json.dumps(data, indent=2))
             location_label = self._update_location_labels_from_weather(
@@ -51,6 +56,7 @@ class WeatherSyncMixin:
             self._refresh_forecast_screen()
         except Exception as e:
             print("Error fetching weather with coordinates:", e)
+            self._weather_from_cache = True  # Mark as using fallback cache
             if self.last_location_label:
                 self._set_location_labels(self.last_location_label)
             else:
@@ -194,6 +200,10 @@ class WeatherSyncMixin:
             # Update current weather icon
             icon_code = current_forecast.get("weather", [{}])[0].get("icon", "01d")
             today_screen.weather_icon = f"icons/{icon_code}.png"
+            
+            # Update location icon based on cache status
+            location_icon = "icons/no_location.png" if self._weather_from_cache else "icons/location.png"
+            today_screen.location_icon_source = location_icon
 
             # The detailed hourly forecast (3-hour entries) is passed to the
             # Today screen so it can populate the horizontal hourly scroller.
@@ -237,6 +247,10 @@ class WeatherSyncMixin:
                     
                     tomorrow_screen.weather_icon = f"icons/{tomorrow_icon}.png"
                     tomorrow_screen.condition_text = tomorrow_condition
+                    
+                    # Update location icon based on cache status
+                    location_icon = "icons/no_location.png" if self._weather_from_cache else "icons/location.png"
+                    tomorrow_screen.location_icon_source = location_icon
                     
                     # Set hourly data for tomorrow
                     tomorrow_screen.set_hourly_data(tomorrow_entries)

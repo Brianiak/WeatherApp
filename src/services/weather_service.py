@@ -371,8 +371,9 @@ def get_weather(lat: str | float | None = None, lon: str | float | None = None) 
     coordinates present in the configured base URL (or none) will be used.
 
     If the API call fails, attempts to return cached weather data from the
-    last successful request. Raises APIRequestError if both the API call
-    and cache retrieval fail.
+    last successful request. The response will have a '__cached__' flag set
+    to True when data comes from cache. Raises APIRequestError if both the 
+    API call and cache retrieval fail.
     """
     url, api_key = _get_config()
     request_url = build_request_url(url, api_key, lat=lat, lon=lon)
@@ -385,6 +386,8 @@ def get_weather(lat: str | float | None = None, lon: str | float | None = None) 
         
         cached_data = _load_weather_cache()
         if cached_data is not None:
+            # Mark that data came from cache
+            cached_data["__cached__"] = True
             return cached_data
         
         # Re-raise the original exception if cache is not available

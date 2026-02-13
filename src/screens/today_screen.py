@@ -23,6 +23,7 @@ class TodayScreen(BaseWeatherScreen):
     """
 
     location_text = StringProperty("Standort wird ermittelt...")
+    location_icon_source = StringProperty("icons/location.png")
     temp_text = StringProperty("13\u00b0")
     condition_text = StringProperty("Clouds")
     weather_icon = StringProperty("icons/01d.png")
