@@ -12,7 +12,7 @@ from kivy.metrics import dp  # noqa: E402
 from kivy.core.window import Window  # noqa: E402
 from kivy.clock import Clock  # noqa: E402
 
-from five_days_screen import FiveDaysScreen, ROW_HEIGHT  # noqa: E402
+from screens.five_days_screen import FiveDaysScreen, ROW_HEIGHT  # noqa: E402
 import services.weather_service as weather_service  # noqa: E402, F401
 
 # Initialize coverage

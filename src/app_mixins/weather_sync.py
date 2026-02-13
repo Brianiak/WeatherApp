@@ -1,4 +1,3 @@
-import json
 import time
 
 from kivy.clock import Clock
@@ -41,7 +40,7 @@ class WeatherSyncMixin:
         try:
             data = weather_service.get_weather(lat=lat, lon=lon)
             self._log_location_roundtrip(lat, lon, data)
-            print(json.dumps(data, indent=2))
+            #print(json.dumps(data, indent=2))
             location_label = self._update_location_labels_from_weather(
                 data,
                 track_as_gps=track_as_gps,
