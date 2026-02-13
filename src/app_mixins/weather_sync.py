@@ -259,7 +259,8 @@ class WeatherSyncMixin:
         if hasattr(screen, "_load_forecast_data"):
             Clock.schedule_once(lambda _dt: screen._load_forecast_data(), 0)
 
-    def _update_weather_display(self, weather_data):        """Update all weather screens with current and forecast data.
+    def _update_weather_display(self, weather_data):        
+        """Update all weather screens with current and forecast data.
         
         Parses the weather API response and updates:
         - Today screen: current temperature, weather condition, hourly forecast
@@ -271,7 +272,8 @@ class WeatherSyncMixin:
         
         Args:
             weather_data (dict): Weather API response with forecast entries
-        """        try:
+        """        
+        try:
             if not weather_data or "list" not in weather_data or not weather_data["list"]:
                 return
             if not self.root or "sm" not in self.root.ids:
