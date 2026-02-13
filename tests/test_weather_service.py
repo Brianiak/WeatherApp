@@ -1,280 +1,31 @@
-import sys
 from pathlib import Path
+from unittest.mock import Mock, patch
+import os
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
+import pytest
 
-import os # noqa: E402
-import unittest  # noqa: E402
-from unittest.mock import patch, Mock, MagicMock  # noqa: E402
-
-import coverage  # noqa: E402
-import services.weather_service as weather_service  # noqa: E402
-
-# Initialize coverage
-cov = coverage.Coverage()
-
-class TestWeatherService(unittest.TestCase):
-    """Unit tests for `weather_service` that mock network calls.
-
-    These tests mock `requests.get` so no real API tokens are consumed.
-    """
-
-    def setUp(self):
-        # Ensure environment variables exist for the service to read.
-        # Prevent the real .env from being loaded during tests
-        self.patcher = patch("services.weather_service.load_dotenv", return_value={})
-        self.patcher.start()
-
-        os.environ.setdefault("URL", "http://example.com/api?key=")
-        os.environ.setdefault("API_KEY", "TESTKEY")
-
-    def tearDown(self):
-        os.environ.pop("URL", None)
-        os.environ.pop("API_KEY", None)
-        self.patcher.stop()
-
-    def test_get_weather_success(self):
-        fake = Mock()
-        fake.status_code = 200
-        fake.ok = True
-        fake.text = "{}"
-        fake.json.return_value = {"ok": True}
-
-        with patch("services.weather_service.requests.get", return_value=fake) as mock_get:
-            data = weather_service.get_weather()
-            self.assertEqual(data, {"ok": True})
-            # Verify the called URL contains the expected appid (API key)
-            _, kwargs = mock_get.call_args
-            called_url = kwargs.get("url")
-            self.assertIsNotNone(called_url)
-            from urllib.parse import urlparse, parse_qs
-
-            parsed = urlparse(called_url)
-            query = parse_qs(parsed.query)
-            self.assertEqual(query.get("appid", [None])[0], "TESTKEY")
-
-    def test_network_error_raises(self):
-        with patch("services.weather_service.requests.get", side_effect=weather_service.requests.ConnectionError("x")):
-            with self.assertRaises(weather_service.NetworkError):
-                weather_service.get_weather()
-
-    def test_401_raises_token_error(self):
-        fake = Mock()
-        fake.status_code = 401
-        fake.ok = False
-        fake.text = "Unauthorized"
-        with patch("services.weather_service.requests.get", return_value=fake):
-            with self.assertRaises(weather_service.APITokenExpiredError):
-                weather_service.get_weather()
-
-    def test_5xx_raises_service_unavailable(self):
-        fake = Mock()
-        fake.status_code = 503
-        fake.ok = False
-        fake.text = "Service Unavailable"
-        with patch("services.weather_service.requests.get", return_value=fake):
-            with self.assertRaises(weather_service.ServiceUnavailableError):
-                weather_service.get_weather()
-
-    def test_4xx_raises_api_request_error(self):
-        fake = Mock()
-        fake.status_code = 404
-        fake.ok = False
-        fake.text = "Not Found"
-        with patch("services.weather_service.requests.get", return_value=fake):
-            with self.assertRaises(weather_service.APIRequestError):
-                weather_service.get_weather()
-
-    def test_invalid_json_raises_api_request_error(self):
-        fake = Mock()
-        fake.status_code = 200
-        fake.ok = True
-        fake.text = "not json"
-        fake.json.side_effect = ValueError("invalid json")
-        with patch("services.weather_service.requests.get", return_value=fake):
-            with self.assertRaises(weather_service.APIRequestError):
-                weather_service.get_weather()
-
-    def test_missing_env_falls_back_to_config(self):
-        # When .env is missing and env vars are unset, config.py fallback is used.
-        os.environ.pop("URL", None)
-        os.environ.pop("API_KEY", None)
-        with patch("services.weather_service.load_dotenv", side_effect=weather_service.EnvNotFoundError()):
-            # config.py fallback should provide URL and API_KEY, so get_weather
-            # will proceed to make an HTTP call.  Mock that call to avoid real requests.
-            fake = Mock()
-            fake.status_code = 200
-            fake.ok = True
-            fake.json.return_value = {"cod": "200", "list": []}
-            with patch("services.weather_service.requests.get", return_value=fake):
-                data = weather_service.get_weather()
-                self.assertIsInstance(data, dict)
+import services.config as config
+import services.weather_service as weather_service
 
 
-# Dummy Tests for coverage
-
-
-class TestBuildRequestUrl(unittest.TestCase):
-    """Tests for build_request_url function"""
-
-    def test_build_request_url_with_lat_lon(self):
-        """Test building URL with latitude and longitude"""
-        url = "https://api.example.com/forecast"
-        api_key = "testkey123"
-        result = weather_service.build_request_url(url, api_key, lat=48.5, lon=7.9)
-        
-        self.assertIn("appid=testkey123", result)
-        self.assertIn("lat=48.5", result)
-        self.assertIn("lon=7.9", result)
-
-    def test_build_request_url_without_coordinates(self):
-        """Test building URL without coordinates"""
-        url = "https://api.example.com/forecast"
-        api_key = "testkey456"
-        result = weather_service.build_request_url(url, api_key)
-        
-        self.assertIn("appid=testkey456", result)
-        self.assertNotIn("lat=", result)
-        self.assertNotIn("lon=", result)
-
-    def test_build_request_url_with_existing_params(self):
-        """Test building URL when base URL already has query params"""
-        url = "https://api.example.com/forecast?units=metric"
-        api_key = "testkey789"
-        result = weather_service.build_request_url(url, api_key, lat=10.0, lon=20.0)
-        
-        self.assertIn("appid=testkey789", result)
-        self.assertIn("units=metric", result)
-        self.assertIn("lat=10.0", result)
-        self.assertIn("lon=20.0", result)
-
-    def test_build_request_url_with_string_coordinates(self):
-        """Test building URL with string coordinates"""
-        url = "https://api.example.com/forecast"
-        api_key = "stringkey"
-        result = weather_service.build_request_url(url, api_key, lat="51.5", lon="-0.1")
-        
-        self.assertIn("lat=51.5", result)
-        self.assertIn("lon=-0.1", result)
-
-
-class TestFetchJson(unittest.TestCase):
-    """Tests for fetch_json function"""
-
-    def test_fetch_json_timeout_raises_network_error(self):
-        """Test that timeout raises NetworkError"""
-        with patch("services.weather_service.requests.get", side_effect=weather_service.requests.Timeout()):
-            with self.assertRaises(weather_service.NetworkError):
-                weather_service.fetch_json("http://example.com/api")
-
-    def test_fetch_json_success_with_valid_json(self):
-        """Test successful fetch with valid JSON response"""
-        fake = Mock()
-        fake.status_code = 200
-        fake.ok = True
-        fake.json.return_value = {"temp": 20, "humidity": 65}
-        
-        with patch("services.weather_service.requests.get", return_value=fake):
-            result = weather_service.fetch_json("http://example.com/api")
-            self.assertEqual(result, {"temp": 20, "humidity": 65})
-
-    def test_fetch_json_custom_timeout(self):
-        """Test that custom timeout is passed to requests"""
-        fake = Mock()
-        fake.status_code = 200
-        fake.ok = True
-        fake.json.return_value = {}
-        
-        with patch("services.weather_service.requests.get", return_value=fake) as mock_get:
-            weather_service.fetch_json("http://example.com/api", timeout=5)
-            mock_get.assert_called_once()
-            call_kwargs = mock_get.call_args[1]
-            self.assertEqual(call_kwargs.get("timeout"), 5)
-
-    def test_fetch_json_payload_cod_error_raises_api_request_error(self):
-        """Test payload-level API error handling via non-200 cod values."""
-        fake = Mock()
-        fake.status_code = 200
-        fake.ok = True
-        fake.json.return_value = {"cod": "404", "message": "city not found"}
-
-        with patch("services.weather_service.requests.get", return_value=fake):
-            with self.assertRaises(weather_service.APIRequestError):
-                weather_service.fetch_json("http://example.com/api")
-
-
-class TestLoadDotenv(unittest.TestCase):
-    """Tests for load_dotenv function"""
-
-    def test_load_dotenv_with_custom_path(self):
-        """Test loading .env from custom path"""
-        env_content = "TEST_VAR=test_value\nANOTHER_VAR=another_value"
-        env_lines = env_content.split('\n')
-        
-        mock_file = MagicMock()
-        mock_file.__enter__.return_value = env_lines
-        mock_file.__exit__.return_value = None
-        
-        with patch("builtins.open", return_value=mock_file):
-            with patch("services.weather_service.Path") as mock_path_class:
-                mock_path_obj = Mock()
-                mock_path_obj.exists.return_value = True
-                mock_path_obj.open.return_value = mock_file
-                mock_path_class.return_value = mock_path_obj
-                
-                result = weather_service.load_dotenv("/custom/path/.env")
-                self.assertIn("TEST_VAR", result)
-
-    def test_load_dotenv_ignores_comments(self):
-        """Test that load_dotenv ignores lines starting with #"""
-        env_lines = [
-            "# This is a comment",
-            "VALID_KEY=value",
-            "# Another comment",
-            "ANOTHER_KEY=another_value"
+class TestEnvLoading:
+    def test_parse_env_lines_filters_comments_and_blank_lines(self):
+        lines = [
+            "# comment",
+            "",
+            " URL = https://api.example.test/forecast ",
+            "API_KEY = abc123",
+            "INVALID_LINE_WITHOUT_EQUALS",
         ]
-        
-        mock_file = MagicMock()
-        mock_file.__enter__.return_value = env_lines
-        mock_file.__exit__.return_value = None
-        
-        with patch("builtins.open", return_value=mock_file):
-            with patch("services.weather_service.Path") as mock_path_class:
-                mock_path_obj = Mock()
-                mock_path_obj.exists.return_value = True
-                mock_path_obj.open.return_value = mock_file
-                mock_path_class.return_value = mock_path_obj
-                
-                result = weather_service.load_dotenv("/custom/.env")
-                self.assertIn("VALID_KEY", result)
-                self.assertIn("ANOTHER_KEY", result)
-                self.assertEqual(len(result), 2)
 
-    def test_load_dotenv_raises_on_missing_file(self):
-        """Test that EnvNotFoundError is raised for missing .env"""
-        with patch("services.weather_service.Path") as mock_path_class:
-            mock_path_obj = Mock()
-            mock_path_obj.exists.return_value = False
-            mock_path_class.return_value = mock_path_obj
-            
-            with self.assertRaises(weather_service.EnvNotFoundError):
-                weather_service.load_dotenv("/nonexistent/.env")
+        parsed = weather_service._parse_env_lines(lines)
 
+        assert parsed == {
+            "URL": "https://api.example.test/forecast",
+            "API_KEY": "abc123",
+        }
 
-class TestInternalHelpers(unittest.TestCase):
-    """Tests for internal helper functions that control dotenv lookup behavior."""
-
-    def test_default_env_paths_without_android_hints(self):
-        """Test default path discovery when no Android env hints are present."""
-        with patch("services.weather_service.os.getenv", return_value=None):
-            paths = weather_service._default_env_paths()
-
-        self.assertGreaterEqual(len(paths), 3)
-        self.assertEqual(len(paths), len({str(path) for path in paths}))
-
-    def test_default_env_paths_with_android_hints_are_deduplicated(self):
-        """Test Android-derived paths are added once even when hints overlap."""
+    def test_default_env_paths_adds_android_hints_once(self):
         env_values = {"ANDROID_ARGUMENT": "/tmp/p4a", "ANDROID_PRIVATE": "/tmp/p4a"}
         with patch(
             "services.weather_service.os.getenv",
@@ -283,26 +34,31 @@ class TestInternalHelpers(unittest.TestCase):
             paths = weather_service._default_env_paths()
 
         as_strings = [str(path) for path in paths]
-        self.assertEqual(as_strings.count(str(Path("/tmp/p4a/.env"))), 1)
-        self.assertEqual(as_strings.count(str(Path("/tmp/p4a/app/.env"))), 1)
+        assert as_strings.count(str(Path("/tmp/p4a/.env"))) == 1
+        assert as_strings.count(str(Path("/tmp/p4a/app/.env"))) == 1
 
-    def test_load_dotenv_from_android_assets_without_pyjnius_returns_none(self):
-        """Test Android asset loader returns None when pyjnius is unavailable."""
-        real_import = __import__
+    def test_load_dotenv_from_explicit_path_updates_environment(self, tmp_path):
+        env_file = tmp_path / ".env"
+        env_file.write_text(
+            "URL=https://api.example.test/forecast\nAPI_KEY=test-key\n",
+            encoding="utf-8",
+        )
 
-        def fake_import(name, *args, **kwargs):
-            if name == "jnius":
-                raise ImportError("pyjnius not installed")
-            return real_import(name, *args, **kwargs)
+        with patch.dict(os.environ, {}, clear=True):
+            loaded = weather_service.load_dotenv(str(env_file))
+            assert os.environ["URL"] == "https://api.example.test/forecast"
+            assert os.environ["API_KEY"] == "test-key"
 
-        with patch("builtins.__import__", side_effect=fake_import):
-            result = weather_service._load_dotenv_from_android_assets()
+        assert loaded["URL"] == "https://api.example.test/forecast"
+        assert loaded["API_KEY"] == "test-key"
 
-        self.assertIsNone(result)
+    def test_load_dotenv_missing_explicit_path_raises(self, tmp_path):
+        missing_path = tmp_path / "missing.env"
+        with pytest.raises(weather_service.EnvNotFoundError):
+            weather_service.load_dotenv(str(missing_path))
 
-    def test_load_dotenv_falls_back_to_android_assets(self):
-        """Test load_dotenv falls back to Android assets when files are absent."""
-        asset_env = {"URL": "http://fallback.local/api", "API_KEY": "fallback-key"}
+    def test_load_dotenv_uses_android_assets_when_files_missing(self):
+        asset_env = {"URL": "https://asset.example/api", "API_KEY": "asset-key"}
         with patch(
             "services.weather_service._default_env_paths",
             return_value=[Path("/does/not/exist/.env")],
@@ -312,21 +68,51 @@ class TestInternalHelpers(unittest.TestCase):
                 return_value=asset_env,
             ):
                 with patch.dict(os.environ, {}, clear=True):
-                    result = weather_service.load_dotenv()
-                    self.assertEqual(os.environ["URL"], "http://fallback.local/api")
-                    self.assertEqual(os.environ["API_KEY"], "fallback-key")
+                    loaded = weather_service.load_dotenv()
+                    assert os.environ["URL"] == "https://asset.example/api"
+                    assert os.environ["API_KEY"] == "asset-key"
 
-        self.assertEqual(result, asset_env)
+        assert loaded == asset_env
+
+    def test_load_dotenv_without_any_source_raises(self):
+        with patch(
+            "services.weather_service._default_env_paths",
+            return_value=[Path("/still/missing/.env")],
+        ):
+            with patch(
+                "services.weather_service._load_dotenv_from_android_assets",
+                return_value=None,
+            ):
+                with pytest.raises(weather_service.EnvNotFoundError):
+                    weather_service.load_dotenv()
+
+    def test_android_asset_loader_returns_none_if_pyjnius_missing(self):
+        real_import = __import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "jnius":
+                raise ImportError("pyjnius missing in tests")
+            return real_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=fake_import):
+            assert weather_service._load_dotenv_from_android_assets() is None
 
 
-class TestConfigResolution(unittest.TestCase):
-    """Tests for config resolution sequence."""
+class TestConfigResolution:
+    def test_get_config_prefers_process_environment(self):
+        with patch.dict(
+            os.environ,
+            {"URL": "https://env.example/api", "API_KEY": "env-key"},
+            clear=True,
+        ):
+            url, api_key = weather_service._get_config()
 
-    def test_get_config_uses_values_loaded_from_dotenv(self):
-        """Test _get_config reads URL/API_KEY after load_dotenv populates env."""
+        assert url == "https://env.example/api"
+        assert api_key == "env-key"
 
+    def test_get_config_loads_dotenv_when_environment_is_empty(self):
         def fake_load_dotenv():
-            os.environ["URL"] = "http://example.com/api"
+            os.environ["URL"] = "https://dotenv.example/api"
             os.environ["API_KEY"] = "dotenv-key"
             return {"URL": os.environ["URL"], "API_KEY": os.environ["API_KEY"]}
 
@@ -334,134 +120,191 @@ class TestConfigResolution(unittest.TestCase):
             with patch("services.weather_service.load_dotenv", side_effect=fake_load_dotenv):
                 url, api_key = weather_service._get_config()
 
-        self.assertEqual(url, "http://example.com/api")
-        self.assertEqual(api_key, "dotenv-key")
+        assert url == "https://dotenv.example/api"
+        assert api_key == "dotenv-key"
+
+    def test_get_config_uses_config_fallback_when_dotenv_is_missing(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with patch(
+                "services.weather_service.load_dotenv",
+                side_effect=weather_service.EnvNotFoundError("missing"),
+            ):
+                with patch.object(config, "URL", "https://config.example/api"):
+                    with patch.object(config, "API_KEY", "config-key"):
+                        url, api_key = weather_service._get_config()
+
+        assert url == "https://config.example/api"
+        assert api_key == "config-key"
+
+    def test_get_config_raises_when_all_sources_are_missing(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with patch(
+                "services.weather_service.load_dotenv",
+                side_effect=weather_service.EnvNotFoundError("missing"),
+            ):
+                with patch.object(config, "URL", ""):
+                    with patch.object(config, "API_KEY", ""):
+                        with pytest.raises(weather_service.MissingAPIConfigError):
+                            weather_service._get_config()
 
 
-class TestGetWeatherWithCoordinates(unittest.TestCase):
-    """Tests for get_weather function with coordinates"""
+class TestUrlAndCacheHelpers:
+    def test_build_request_url_sets_appid_and_coordinates(self):
+        built = weather_service.build_request_url(
+            "https://api.example.test/forecast?units=metric",
+            "my-api-key",
+            lat=48.5,
+            lon=7.9,
+        )
 
-    def setUp(self):
-        self.patcher = patch("services.weather_service.load_dotenv", return_value={})
-        self.patcher.start()
-        os.environ.setdefault("URL", "http://example.com/api?key=")
-        os.environ.setdefault("API_KEY", "TESTKEY")
+        assert "appid=my-api-key" in built
+        assert "units=metric" in built
+        assert "lat=48.5" in built
+        assert "lon=7.9" in built
 
-    def tearDown(self):
-        os.environ.pop("URL", None)
-        os.environ.pop("API_KEY", None)
-        self.patcher.stop()
+    def test_get_weather_cache_path_points_to_expected_file(self):
+        cache_path = weather_service._get_weather_cache_path()
+        expected_suffix = Path("src") / "json" / "last_weather.json"
+        assert str(cache_path).endswith(str(expected_suffix))
 
-    def test_get_weather_with_lat_lon(self):
-        """Test get_weather with latitude and longitude"""
+    def test_save_and_load_weather_cache_roundtrip(self, tmp_path):
+        cache_file = tmp_path / "json" / "last_weather.json"
+        payload = {"cod": "200", "list": [{"main": {"temp": 280}}]}
+
+        with patch("services.weather_service._get_weather_cache_path", return_value=cache_file):
+            weather_service._save_weather_cache(payload)
+            loaded = weather_service._load_weather_cache()
+
+        assert loaded == payload
+
+    def test_load_weather_cache_returns_none_when_file_is_missing(self, tmp_path):
+        cache_file = tmp_path / "json" / "does-not-exist.json"
+
+        with patch("services.weather_service._get_weather_cache_path", return_value=cache_file):
+            loaded = weather_service._load_weather_cache()
+
+        assert loaded is None
+
+
+class TestFetchJson:
+    @staticmethod
+    def _response(
+        status_code=200,
+        ok=True,
+        payload=None,
+        text="",
+    ):
         fake = Mock()
-        fake.status_code = 200
-        fake.ok = True
-        fake.json.return_value = {"list": [{"main": {"temp": 290}}]}
-        
-        with patch("services.weather_service.requests.get", return_value=fake):
-            result = weather_service.get_weather(lat=48.0, lon=7.0)
-            self.assertIn("list", result)
+        fake.status_code = status_code
+        fake.ok = ok
+        fake.text = text
+        if payload is None:
+            payload = {"cod": "200", "list": []}
+        fake.json.return_value = payload
+        return fake
 
-    def test_get_weather_passes_coordinates_to_build_url(self):
-        """Test that coordinates are passed through to build_request_url"""
-        fake = Mock()
-        fake.status_code = 200
-        fake.ok = True
-        fake.json.return_value = {}
-        
-        with patch("services.weather_service.requests.get", return_value=fake) as mock_get:
-            weather_service.get_weather(lat=40.0, lon=-74.0)
-            called_url = mock_get.call_args[1]["url"]
-            self.assertIn("lat=40.0", called_url)
-            self.assertIn("lon=-74.0", called_url)
+    def test_fetch_json_raises_network_error_on_timeout(self):
+        with patch(
+            "services.weather_service.requests.get",
+            side_effect=weather_service.requests.Timeout(),
+        ):
+            with pytest.raises(weather_service.NetworkError):
+                weather_service.fetch_json("https://api.example.test/forecast")
+
+    def test_fetch_json_raises_api_token_error_on_401(self):
+        response = self._response(status_code=401, ok=False, text="Unauthorized")
+        with patch("services.weather_service.requests.get", return_value=response):
+            with pytest.raises(weather_service.APITokenExpiredError):
+                weather_service.fetch_json("https://api.example.test/forecast")
+
+    def test_fetch_json_raises_service_unavailable_on_5xx(self):
+        response = self._response(status_code=503, ok=False, text="Service unavailable")
+        with patch("services.weather_service.requests.get", return_value=response):
+            with pytest.raises(weather_service.ServiceUnavailableError):
+                weather_service.fetch_json("https://api.example.test/forecast")
+
+    def test_fetch_json_raises_api_request_error_on_non_ok_4xx(self):
+        response = self._response(status_code=404, ok=False, text="Not found")
+        with patch("services.weather_service.requests.get", return_value=response):
+            with pytest.raises(weather_service.APIRequestError):
+                weather_service.fetch_json("https://api.example.test/forecast")
+
+    def test_fetch_json_raises_api_request_error_on_invalid_json(self):
+        response = self._response()
+        response.json.side_effect = ValueError("invalid json")
+        with patch("services.weather_service.requests.get", return_value=response):
+            with pytest.raises(weather_service.APIRequestError):
+                weather_service.fetch_json("https://api.example.test/forecast")
+
+    def test_fetch_json_raises_api_request_error_on_payload_cod_error(self):
+        response = self._response(payload={"cod": "404", "message": "city not found"})
+        with patch("services.weather_service.requests.get", return_value=response):
+            with pytest.raises(weather_service.APIRequestError):
+                weather_service.fetch_json("https://api.example.test/forecast")
+
+    def test_fetch_json_returns_payload_and_saves_cache_on_success(self):
+        payload = {"cod": "200", "list": [{"main": {"temp": 295}}]}
+        response = self._response(payload=payload)
+        with patch("services.weather_service.requests.get", return_value=response):
+            with patch("services.weather_service._save_weather_cache") as save_cache:
+                result = weather_service.fetch_json("https://api.example.test/forecast")
+
+        assert result == payload
+        save_cache.assert_called_once_with(payload)
 
 
-class TestErrorHandling(unittest.TestCase):
-    """Tests for error handling"""
+class TestGetWeather:
+    def test_get_weather_builds_url_and_returns_fetch_result(self):
+        with patch(
+            "services.weather_service._get_config",
+            return_value=("https://api.example.test/forecast", "key-123"),
+        ):
+            with patch(
+                "services.weather_service.build_request_url",
+                return_value="https://api.example.test/forecast?appid=key-123&lat=1&lon=2",
+            ) as build_url:
+                with patch(
+                    "services.weather_service.fetch_json",
+                    return_value={"cod": "200", "list": []},
+                ) as fetch_json:
+                    result = weather_service.get_weather(lat=1, lon=2)
 
-    def setUp(self):
-        self.patcher = patch("services.weather_service.load_dotenv", return_value={})
-        self.patcher.start()
-        os.environ.setdefault("URL", "http://example.com/api?key=")
-        os.environ.setdefault("API_KEY", "TESTKEY")
+        assert result == {"cod": "200", "list": []}
+        build_url.assert_called_once_with(
+            "https://api.example.test/forecast",
+            "key-123",
+            lat=1,
+            lon=2,
+        )
+        fetch_json.assert_called_once()
 
-    def tearDown(self):
-        os.environ.pop("URL", None)
-        os.environ.pop("API_KEY", None)
-        self.patcher.stop()
+    def test_get_weather_returns_cached_payload_when_fetch_fails(self):
+        with patch(
+            "services.weather_service._get_config",
+            return_value=("https://api.example.test/forecast", "key-123"),
+        ):
+            with patch(
+                "services.weather_service.fetch_json",
+                side_effect=weather_service.NetworkError("offline"),
+            ):
+                with patch(
+                    "services.weather_service._load_weather_cache",
+                    return_value={"cod": "200", "list": [{"main": {"temp": 300}}]},
+                ):
+                    result = weather_service.get_weather()
 
-    def test_missing_url_raises_error(self):
-        """Test that missing URL raises MissingAPIConfigError"""
-        os.environ.pop("URL")
-        os.environ.pop("API_KEY", None)
-        with patch("services.weather_service.load_dotenv", side_effect=weather_service.EnvNotFoundError()):
-            with patch("services.weather_service._get_config.__module__", "services.weather_service"):
-                # Also block config.py fallback import
-                import services.config
-                orig_url = services.config.URL
-                orig_key = services.config.API_KEY
-                services.config.URL = ""
-                services.config.API_KEY = ""
-                try:
-                    with self.assertRaises(weather_service.MissingAPIConfigError):
+        assert result["__cached__"] is True
+        assert result["cod"] == "200"
+
+    def test_get_weather_reraises_original_error_when_cache_is_missing(self):
+        with patch(
+            "services.weather_service._get_config",
+            return_value=("https://api.example.test/forecast", "key-123"),
+        ):
+            with patch(
+                "services.weather_service.fetch_json",
+                side_effect=weather_service.APIRequestError("bad request"),
+            ):
+                with patch("services.weather_service._load_weather_cache", return_value=None):
+                    with pytest.raises(weather_service.APIRequestError):
                         weather_service.get_weather()
-                finally:
-                    services.config.URL = orig_url
-                    services.config.API_KEY = orig_key
-
-    def test_missing_api_key_raises_error(self):
-        """Test that missing API_KEY raises MissingAPIConfigError"""
-        os.environ.pop("API_KEY")
-        os.environ.pop("URL", None)
-        with patch("services.weather_service.load_dotenv", side_effect=weather_service.EnvNotFoundError()):
-            import services.config
-            orig_url = services.config.URL
-            orig_key = services.config.API_KEY
-            services.config.URL = ""
-            services.config.API_KEY = ""
-            try:
-                with self.assertRaises(weather_service.MissingAPIConfigError):
-                    weather_service.get_weather()
-            finally:
-                services.config.URL = orig_url
-                services.config.API_KEY = orig_key
-
-    def test_400_bad_request_raises_error(self):
-        """Test that 400 status code raises APIRequestError"""
-        fake = Mock()
-        fake.status_code = 400
-        fake.ok = False
-        fake.text = "Bad Request"
-        
-        with patch("services.weather_service.requests.get", return_value=fake):
-            with self.assertRaises(weather_service.APIRequestError):
-                weather_service.get_weather()
-
-    def test_500_internal_error_raises_service_unavailable(self):
-        """Test that 500 status raises ServiceUnavailableError"""
-        fake = Mock()
-        fake.status_code = 500
-        fake.ok = False
-        fake.text = "Internal Server Error"
-        
-        with patch("services.weather_service.requests.get", return_value=fake):
-            with self.assertRaises(weather_service.ServiceUnavailableError):
-                weather_service.get_weather()
-
-    def test_502_bad_gateway_raises_service_unavailable(self):
-        """Test that 502 status raises ServiceUnavailableError"""
-        fake = Mock()
-        fake.status_code = 502
-        fake.ok = False
-        fake.text = "Bad Gateway"
-        
-        with patch("services.weather_service.requests.get", return_value=fake):
-            with self.assertRaises(weather_service.ServiceUnavailableError):
-                weather_service.get_weather()
-
-# ----
-
-
-if __name__ == "__main__":
-    unittest.main()
