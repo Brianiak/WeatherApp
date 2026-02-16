@@ -31,6 +31,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install ruff pytest pytest-cov
+          python -m pip check
 
       - name: Lint with ruff
         run: ruff check .
@@ -96,6 +97,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install buildozer Cython==0.29.36 virtualenv
+          python -m pip check
 
       - name: Cache Buildozer
         uses: actions/cache@v4
