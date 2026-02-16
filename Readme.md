@@ -1,40 +1,38 @@
 # WeatherApp
 
-Kivy-based weather app for desktop and Android.
+Kivy-basierte Wetter-App fuer Desktop und Android (Buildozer-Appname: `Weatherly`).
 
-The app displays weather data from OpenWeatherMap in three views:
-- `Heute` (today)
-- `Morgen` (tomorrow)
-- `5 Tage` (5-day forecast)
+Die App nutzt OpenWeatherMap-Forecastdaten (`/data/2.5/forecast`) und zeigt drei Ansichten:
+- `Heute`
+- `Morgen`
+- `5 Tage`
 
-It supports live Android GPS, cached last-known location, and a default fallback location when GPS is unavailable.
+## Features (aktueller Stand)
 
-## Features
+- Aktuelles Wetter mit Temperatur, Bedingung und Standortlabel.
+- Stundenvorschau fuer `Heute` (max. 8 Eintraege, horizontal).
+- Stundenvorschau fuer `Morgen` (alle verfuegbaren Eintraege, horizontal).
+- 5-Tage-Ansicht mit:
+  - Min/Max pro Tag
+  - Tagesabschnitte `Morgen / Mittag / Abend / Nacht`
+- Android-Standortfluss mit Runtime-Permissions (`COARSE`/`FINE`) und `LocationManager`.
+- Fallback-Kette fuer Standort:
+  - Live-GPS
+  - Letzter erfolgreicher GPS-Standort (`user_data_dir/last_location.json`)
+  - Default-Koordinaten London (`51.5074, -0.1278`)
+- Wetter-Cache in `src/json/last_weather.json` bei erfolgreicher API-Antwort.
+- API-Fallback auf Wetter-Cache bei Request-Fehlern.
+- Kennzeichnung von Cache-Daten ueber `__cached__` Flag in `weather_service.get_weather()`.
+- Spezifische Fehlerklassen fuer API/Netzwerk/Config (`src/utils/exceptions.py`).
 
-- Current weather display (temperature, condition, humidity, wind)
-- Tomorrow overview (condition, min/max, day parts)
-- 5-day forecast list with weather icons and day-part temperatures
-- Responsive card layout for desktop and mobile-like screens
-- Android location flow with runtime permissions
-- Location fallback chain: live GPS -> cached location -> default coordinates
-- Error handling for API/network/config problems
-
-## Tech Stack
-
-- Python
-- Kivy (`kivy>=2.3.1`)
-- Requests (`requests==2.32.5`)
-- Pyjnius for Android bridge (`pyjnius==1.6.1`, non-Windows)
-- Ruff + Pytest/Unittest for quality checks
-
-## Project Structure
+## Projektstruktur
 
 ```text
 src/
   main.py
   weather.kv
   base_screen.py
-  five_days_screen.py
+  .env
   app_mixins/
     android_location.py
     location_cache.py
@@ -42,39 +40,64 @@ src/
   screens/
     today_screen.py
     tomorrow_screen.py
+    five_days_screen.py
   services/
     weather_service.py
     config.py
   ui/
     weather_root.py
     forecast_row.py
+  utils/
+    exceptions.py
+  icons/
+  json/
+    last_weather.json
 tests/
   test_weather_service.py
   test_five_days_screen.py
+.github/workflows/
+  build-apk.yml
+  lint-test-branches.yml
+  protect-main.yml
 buildozer.spec
 requirements.txt
 pytest.ini
 ```
 
-## Configuration
+## Konfiguration
 
-Create a `.env` file in the repository root:
+### 1) `.env` anlegen
+
+Beispiel fuer `src/.env`:
 
 ```env
 URL=https://api.openweathermap.org/data/2.5/forecast
 API_KEY=your_openweathermap_api_key
 ```
 
-Config resolution order in `src/services/weather_service.py`:
-1. Environment variables (`URL`, `API_KEY`)
-2. `.env` files (multiple candidate paths, including project root)
-3. `src/services/config.py` fallback
+Hinweis:
+- Die Build-Workflows erwarten aktuell `src/.env` und kopieren sie nach `.env` im Repo-Root.
+- Lokal kannst du alternativ auch `.env` im Repo-Root verwenden.
 
-Notes:
-- Keep real keys out of version control.
-- CI/APK workflows expect `src/.env` to exist and copy it to root during build.
+### 2) Aufloesungsreihenfolge fuer URL/API_KEY
 
-## Local Setup
+`src/services/weather_service.py` loest Konfiguration in dieser Reihenfolge auf:
+1. Bereits gesetzte Umgebungsvariablen (`URL`, `API_KEY`)
+2. `.env` von Dateisystem-Kandidaten (u. a. Repo-Root, `src/`, CWD)
+3. Android-Assets (`.env`, falls im APK-Bundle vorhanden)
+4. Fallback aus `src/services/config.py`
+
+Wenn nichts verfuegbar ist, wird `MissingAPIConfigError` geworfen.
+
+### 3) Sicherheit
+
+`src/services/config.py` enthaelt derzeit einen hardcodierten Fallback-Key.
+Empfehlung:
+- Echte Keys nicht committen.
+- Keys ueber `.env` oder GitHub Secrets bereitstellen.
+- Bereits veroeffentlichte Keys im OpenWeatherMap-Konto rotieren.
+
+## Lokales Setup (Windows PowerShell)
 
 ```powershell
 py -3.11 -m venv .venv
@@ -83,59 +106,60 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## Run the App
-
-From repo root:
+## App starten
 
 ```powershell
 python src/main.py
 ```
 
-`src/main.py` prints one weather JSON response at startup and then launches the Kivy UI.
+Beim direkten Start als Skript wird einmal die rohe Wetter-JSON ausgegeben, danach startet die UI.
 
-## Tests and Lint
-
-Run unit tests (unittest):
+## Tests und Lint
 
 ```powershell
 python -m unittest discover -s tests
-```
-
-Run tests with pytest:
-
-```powershell
-python -m pytest -q -p no:cacheprovider
-```
-
-Run lint:
-
-```powershell
+python -m pytest tests/ -q -p no:cacheprovider
 python -m ruff check .
 ```
 
-## Android Build
+Zusatz:
+- `pytest.ini` hat Coverage-Optionen inkl. `--cov-fail-under=70`.
+- CI nutzt fuer Kivy-Tests `xvfb-run`.
 
-The repository includes `buildozer.spec` and GitHub Actions workflows for APK builds.
-
-Typical local build command (Linux/WSL environment):
+## Android Build (lokal, Linux/WSL empfohlen)
 
 ```bash
 buildozer -v android debug
 ```
 
-Important Android settings already present:
-- Permissions: `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`, `WAKE_LOCK`
-- API levels: `android.minapi = 21`, `android.api = 33`
-- Arch: `arm64-v8a`
+Wichtige `buildozer.spec`-Punkte:
+- `android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_COARSE_LOCATION,ACCESS_FINE_LOCATION,WAKE_LOCK`
+- `android.api = 33`
+- `android.minapi = 21`
+- `android.ndk = 25b`
+- `android.archs = arm64-v8a`
+- `source.include_exts` enthaelt `env` (fuer `.env` Packaging)
 
-## CI Workflows
+## CI/CD Workflows (aktueller Stand)
 
-- `.github/workflows/main_caching.yml`: lint + tests + Android build for `main`
-- `.github/workflows/lint-test-branches.yml`: branch/PR lint + tests + Android test build
-- `.github/workflows/build-apk.yml`: manual APK build (`workflow_dispatch`)
+- `lint-test-branches.yml`
+  - Trigger: `pull_request` und `push` auf allen Branches ausser `main/master`
+  - Jobs: `lint-test` und danach `build-android-apk-testing`
+  - Hinweis: Der Test-Step im Job `lint-test` hat `continue-on-error: true`
+- `build-apk.yml`
+  - Trigger: `push` auf `main` und manuell (`workflow_dispatch`)
+  - Jobs: `lint`, `test`, `build-android`
+  - Hinweis: `build-android` hat aktuell kein aktives `needs` auf `lint`/`test`
+- `protect-main.yml`
+  - Trigger: `push` auf `main`
+  - Blockiert Commits ohne PR-Verknuepfung
 
-## Known Behavior and Fallbacks
+Hinweis:
+Alle Android-Build-Workflows brechen ab, wenn `src/.env` fehlt.
 
-- Desktop platforms without Android `LocationManager` use cached/default coordinates.
-- If weather refresh fails, the app keeps working with fallback screen data where implemented.
-- Weather refresh is throttled via `WEATHER_REFRESH_INTERVAL` in `src/main.py`.
+## Laufzeitdetails
+
+- Desktop ohne Android `LocationManager` nutzt automatisch Fallback-Koordinaten oder letzten Standort-Cache.
+- GPS-Timeout ist in `WeatherApp.GPS_TIMEOUT = 45`.
+- Wetter-Refresh ist in `WeatherApp.WEATHER_REFRESH_INTERVAL = 60` Sekunden gedrosselt.
+- Bei gecachten Wetterdaten wird in der UI das Icon `icons/no_location.png` statt `icons/location.png` gesetzt.
