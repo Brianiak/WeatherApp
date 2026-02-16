@@ -1,35 +1,29 @@
 # WeatherApp
 
-Kivy-basierte Wetter-App fuer Desktop und Android.
+Kivy-basierte Wetter-App fuer Desktop und Android (Buildozer-Appname: `Weatherly`).
 
-Die App zeigt OpenWeatherMap-Daten in drei Ansichten:
+Die App nutzt OpenWeatherMap-Forecastdaten (`/data/2.5/forecast`) und zeigt drei Ansichten:
 - `Heute`
 - `Morgen`
 - `5 Tage`
 
-## Features
+## Features (aktueller Stand)
 
-- Aktuelles Wetter (Temperatur, Zustand, Ort)
-- Horizontale Stundenvorschau fuer `Heute`
-- Horizontale Stundenvorschau fuer `Morgen`
-- 5-Tage-Liste mit Min/Max und Tagesabschnitten (Morgen/Mittag/Abend/Nacht)
-- Android-GPS mit Runtime-Permissions
-- Standort-Fallback-Kette:
-  - Live GPS
-  - Letzter erfolgreicher Standort aus Cache
-  - Default-Koordinaten (London: `51.5074, -0.1278`)
-- Wetter-Cache in `src/json/last_weather.json` bei erfolgreichem API-Call
-- API-Fallback auf letzte gecachte Wetterdaten bei Netzwerk/API-Problemen
-- Robuste API-Fehlerbehandlung (`NetworkError`, `ServiceUnavailableError`, `APITokenExpiredError`, ...)
-
-## Tech Stack
-
-- Python 3.11
-- Kivy (`kivy>=2.3.1`)
-- Requests (`requests==2.32.5`)
-- Pyjnius (`pyjnius==1.6.1`, nur non-Windows)
-- Tests: `unittest` + `pytest`
-- Lint: `ruff`
+- Aktuelles Wetter mit Temperatur, Bedingung und Standortlabel.
+- Stundenvorschau fuer `Heute` (max. 8 Eintraege, horizontal).
+- Stundenvorschau fuer `Morgen` (alle verfuegbaren Eintraege, horizontal).
+- 5-Tage-Ansicht mit:
+  - Min/Max pro Tag
+  - Tagesabschnitte `Morgen / Mittag / Abend / Nacht`
+- Android-Standortfluss mit Runtime-Permissions (`COARSE`/`FINE`) und `LocationManager`.
+- Fallback-Kette fuer Standort:
+  - Live-GPS
+  - Letzter erfolgreicher GPS-Standort (`user_data_dir/last_location.json`)
+  - Default-Koordinaten London (`51.5074, -0.1278`)
+- Wetter-Cache in `src/json/last_weather.json` bei erfolgreicher API-Antwort.
+- API-Fallback auf Wetter-Cache bei Request-Fehlern.
+- Kennzeichnung von Cache-Daten ueber `__cached__` Flag in `weather_service.get_weather()`.
+- Spezifische Fehlerklassen fuer API/Netzwerk/Config (`src/utils/exceptions.py`).
 
 ## Projektstruktur
 
@@ -58,17 +52,14 @@ src/
   icons/
   json/
     last_weather.json
-
 tests/
   test_weather_service.py
   test_five_days_screen.py
-
 .github/workflows/
   build-apk.yml
   lint-test-branches.yml
   main_caching.yml
   protect-main.yml
-
 buildozer.spec
 requirements.txt
 pytest.ini
@@ -76,35 +67,36 @@ pytest.ini
 
 ## Konfiguration
 
-### 1) Umgebungsvariablen (`URL`, `API_KEY`)
+### 1) `.env` anlegen
 
-Beispiel fuer `.env`:
+Beispiel fuer `src/.env`:
 
 ```env
 URL=https://api.openweathermap.org/data/2.5/forecast
 API_KEY=your_openweathermap_api_key
 ```
 
-### 2) Welche `.env` wird genutzt?
+Hinweis:
+- Die Build-Workflows erwarten aktuell `src/.env` und kopieren sie nach `.env` im Repo-Root.
+- Lokal kannst du alternativ auch `.env` im Repo-Root verwenden.
 
-Die App sucht die Konfiguration in dieser Reihenfolge:
+### 2) Aufloesungsreihenfolge fuer URL/API_KEY
+
+`src/services/weather_service.py` loest Konfiguration in dieser Reihenfolge auf:
 1. Bereits gesetzte Umgebungsvariablen (`URL`, `API_KEY`)
-2. `.env`-Dateien (mehrere Kandidaten, inkl. Repo-Root und Laufzeitpfade)
-3. Android-Assets (`.env`)
+2. `.env` von Dateisystem-Kandidaten (u. a. Repo-Root, `src/`, CWD)
+3. Android-Assets (`.env`, falls im APK-Bundle vorhanden)
 4. Fallback aus `src/services/config.py`
 
-### 3) Wichtig fuer CI/Android Build
+Wenn nichts verfuegbar ist, wird `MissingAPIConfigError` geworfen.
 
-Die GitHub-Workflows erwarten `src/.env` und kopieren sie beim Build nach `.env` im Repo-Root.
+### 3) Sicherheit
 
-## Sicherheitshinweis
-
-`src/services/config.py` enthaelt aktuell einen Fallback-API-Key.
-
+`src/services/config.py` enthaelt derzeit einen hardcodierten Fallback-Key.
 Empfehlung:
-- Keine echten Keys in `config.py` committen.
-- Key nur ueber `.env`/Secrets bereitstellen.
-- Bereits geleakte Keys im OpenWeatherMap-Account rotieren.
+- Echte Keys nicht committen.
+- Keys ueber `.env` oder GitHub Secrets bereitstellen.
+- Bereits veroeffentlichte Keys im OpenWeatherMap-Konto rotieren.
 
 ## Lokales Setup (Windows PowerShell)
 
@@ -121,39 +113,55 @@ pip install -r requirements.txt
 python src/main.py
 ```
 
-Hinweis: Beim Start wird einmal die rohe Wetter-JSON auf der Konsole ausgegeben, danach startet die UI.
+Beim direkten Start als Skript wird einmal die rohe Wetter-JSON ausgegeben, danach startet die UI.
 
 ## Tests und Lint
 
 ```powershell
 python -m unittest discover -s tests
-python -m pytest -q -p no:cacheprovider
+python -m pytest tests/ -q -p no:cacheprovider
 python -m ruff check .
 ```
 
-## Android Build (Linux/WSL empfohlen)
+Zusatz:
+- `pytest.ini` hat Coverage-Optionen inkl. `--cov-fail-under=70`.
+- CI nutzt fuer Kivy-Tests `xvfb-run`.
+
+## Android Build (lokal, Linux/WSL empfohlen)
 
 ```bash
 buildozer -v android debug
 ```
 
-Relevante Einstellungen in `buildozer.spec`:
-- Permissions: `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`, `WAKE_LOCK`
-- `android.minapi = 21`
+Wichtige `buildozer.spec`-Punkte:
+- `android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_COARSE_LOCATION,ACCESS_FINE_LOCATION,WAKE_LOCK`
 - `android.api = 33`
-- Architektur: `arm64-v8a`
+- `android.minapi = 21`
+- `android.ndk = 25b`
+- `android.archs = arm64-v8a`
+- `source.include_exts` enthaelt `env` (fuer `.env` Packaging)
 
-## CI Workflows
+## CI/CD Workflows (aktueller Stand)
 
-- `main_caching.yml`: Build-Job (manual trigger)
-- `lint-test-branches.yml`: Lint, Tests, Android-Testbuild fuer Branches/PRs
-- `build-apk.yml`: Lint, Tests, Android-Build auf `main` + manuell
-- `protect-main.yml`: blockt direkte Pushes auf `main` ohne PR-Bezug
+- `lint-test-branches.yml`
+  - Trigger: `pull_request` und `push` auf allen Branches ausser `main/master`
+  - Jobs: Lint + Tests + Coverage Upload + Android-Testbuild
+- `build-apk.yml`
+  - Trigger: `push` auf `main` und manuell (`workflow_dispatch`)
+  - Jobs: `lint`, `test`, `build-android` (APK + Build-Logs als Artefakte)
+- `main_caching.yml`
+  - Trigger: manuell (`workflow_dispatch`)
+  - Fokus: Android-Build mit Buildozer-Cache
+- `protect-main.yml`
+  - Trigger: `push` auf `main`
+  - Blockiert Commits ohne PR-Verknuepfung
 
-## Bekannte Laufzeit-Details
+Hinweis:
+Alle Android-Build-Workflows brechen ab, wenn `src/.env` fehlt.
 
-- Auf Desktop gibt es keinen Android `LocationManager`; dann greift der Fallback-Flow.
-- Wetter-Refresh ist in `src/main.py` ueber `WEATHER_REFRESH_INTERVAL` gedrosselt.
-- Letzter erfolgreicher Standort wird als `last_location.json` im `user_data_dir` gecacht.
-- Letzte erfolgreiche Wetterantwort wird in `src/json/last_weather.json` gespeichert und bei Fehlern als Fallback genutzt.
-- Bei Cache-Fallback setzt `weather_service.get_weather()` das Flag `__cached__ = True`.
+## Laufzeitdetails
+
+- Desktop ohne Android `LocationManager` nutzt automatisch Fallback-Koordinaten oder letzten Standort-Cache.
+- GPS-Timeout ist in `WeatherApp.GPS_TIMEOUT = 45`.
+- Wetter-Refresh ist in `WeatherApp.WEATHER_REFRESH_INTERVAL = 60` Sekunden gedrosselt.
+- Bei gecachten Wetterdaten wird in der UI das Icon `icons/no_location.png` statt `icons/location.png` gesetzt.
