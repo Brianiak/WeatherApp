@@ -58,7 +58,6 @@ tests/
 .github/workflows/
   build-apk.yml
   lint-test-branches.yml
-  main_caching.yml
   protect-main.yml
 buildozer.spec
 requirements.txt
@@ -145,13 +144,12 @@ Wichtige `buildozer.spec`-Punkte:
 
 - `lint-test-branches.yml`
   - Trigger: `pull_request` und `push` auf allen Branches ausser `main/master`
-  - Jobs: Lint + Tests + Coverage Upload + Android-Testbuild
+  - Jobs: `lint-test` und danach `build-android-apk-testing`
+  - Hinweis: Der Test-Step im Job `lint-test` hat `continue-on-error: true`
 - `build-apk.yml`
   - Trigger: `push` auf `main` und manuell (`workflow_dispatch`)
-  - Jobs: `lint`, `test`, `build-android` (APK + Build-Logs als Artefakte)
-- `main_caching.yml`
-  - Trigger: manuell (`workflow_dispatch`)
-  - Fokus: Android-Build mit Buildozer-Cache
+  - Jobs: `lint`, `test`, `build-android`
+  - Hinweis: `build-android` hat aktuell kein aktives `needs` auf `lint`/`test`
 - `protect-main.yml`
   - Trigger: `push` auf `main`
   - Blockiert Commits ohne PR-Verknuepfung
