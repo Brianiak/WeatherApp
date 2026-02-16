@@ -53,6 +53,12 @@ src/
   json/
     last_weather.json
 tests/
+  conftest.py
+  test_android_location_mixin.py
+  test_base_and_ui.py
+  test_location_cache_mixin.py
+  test_screens_today_tomorrow.py
+  test_weather_sync_mixin.py
   test_weather_service.py
   test_five_days_screen.py
 .github/workflows/
