@@ -80,7 +80,7 @@ jobs:
   build-android:
     name: Build for Android
     runs-on: ubuntu-22.04
-    #needs: [lint, test]
+    needs: [lint, test]
 
     steps:
       - name: Checkout
