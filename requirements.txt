@@ -14,13 +14,13 @@ pytest-cov==7.0.0
 coverage[toml]>=7.10.6,<8
 
 #for school pcs
-  #kivy
-  #https://github.com/kivymd/KivyMD/archive/master.zip
-  #materialyoucolor
-  #exceptiongroup
-  #asyncgui
-  #asynckivy
-  #faker
+    #kivy
+    #https://github.com/kivymd/KivyMD/archive/master.zip
+    #materialyoucolor
+    #exceptiongroup
+    #asyncgui
+    #asynckivy
+    #faker
 
 # Kivy Issues? Try:
 #py -3.10 -m pip install -r requirements.txt
